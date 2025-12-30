@@ -1,8 +1,13 @@
 /**
- * 미니맵 컴포넌트
+ * 미니맵 컴포넌트 (성능 최적화 버전)
  * 전체 맵에서 플레이어들의 위치를 표시합니다.
+ * 
+ * 최적화:
+ * - Canvas 기반 렌더링으로 DOM 조작 최소화
+ * - 200ms 간격 업데이트 (5fps)
+ * - requestAnimationFrame 대신 setInterval 사용
  */
-import { useMemo } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import { useGameStore } from '../../stores/gameStore';
 import { WORLD_SIZE } from '@chaos-rps/shared';
 import type { RPSState } from '@chaos-rps/shared';
@@ -15,72 +20,89 @@ const RPS_COLORS: Record<RPSState, string> = {
 };
 
 /** 미니맵 크기 설정 */
-const MINIMAP_SIZE = { width: 120, height: 120 };
+const MINIMAP_SIZE = 120;
+const SCALE = MINIMAP_SIZE / WORLD_SIZE;
 
 /**
- * 미니맵 컴포넌트
- * 화면 우측 하단에 전체 맵 상황을 표시합니다.
+ * 미니맵 컴포넌트 (Canvas 기반)
  */
-export function Minimap() {
-  const { players, myPlayer } = useGameStore();
+export const Minimap = memo(function Minimap() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // 월드 좌표를 미니맵 좌표로 변환하는 스케일
-  const scale = useMemo(() => ({
-    x: MINIMAP_SIZE.width / WORLD_SIZE,
-    y: MINIMAP_SIZE.height / WORLD_SIZE,
-  }), []);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-  // 플레이어 점 렌더링 (transition 제거로 끊김 해결)
-  const playerDots = useMemo(() => {
-    const dots: JSX.Element[] = [];
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    players.forEach((player, id) => {
-      const isMe = myPlayer?.id === id;
-      const x = player.x * scale.x;
-      const y = player.y * scale.y;
-      const color = RPS_COLORS[player.rpsState];
+    // 200ms 간격으로 미니맵 업데이트 (성능 최적화)
+    const draw = () => {
+      const { players, myPlayer } = useGameStore.getState();
+      
+      // 캔버스 클리어
+      ctx.clearRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
 
-      dots.push(
-        <div
-          key={id}
-          className={`absolute rounded-full ${isMe ? 'z-10' : 'z-0'}`}
-          style={{
-            left: `${x}px`,
-            top: `${y}px`,
-            width: isMe ? '8px' : '4px',
-            height: isMe ? '8px' : '4px',
-            backgroundColor: color,
-            transform: 'translate(-50%, -50%)',
-            boxShadow: isMe ? `0 0 6px ${color}, 0 0 12px ${color}` : 'none',
-            border: isMe ? '1px solid white' : 'none',
-          }}
-        />
-      );
-    });
+      // 배경
+      ctx.fillStyle = 'rgba(17, 24, 39, 0.8)';
+      ctx.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
 
-    return dots;
-  }, [players, myPlayer, scale]);
+      // 그리드
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.lineWidth = 1;
+      const gridSize = MINIMAP_SIZE / 6;
+      for (let i = 1; i < 6; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * gridSize, 0);
+        ctx.lineTo(i * gridSize, MINIMAP_SIZE);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i * gridSize);
+        ctx.lineTo(MINIMAP_SIZE, i * gridSize);
+        ctx.stroke();
+      }
+
+      // 플레이어 점 그리기
+      players.forEach((player, id) => {
+        const isMe = myPlayer?.id === id;
+        const x = player.x * SCALE;
+        const y = player.y * SCALE;
+        const color = RPS_COLORS[player.rpsState];
+        const radius = isMe ? 4 : 2;
+
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        // 내 플레이어는 테두리 추가
+        if (isMe) {
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      });
+
+      // 테두리
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+    };
+
+    draw();
+    const interval = setInterval(draw, 100);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="fixed bottom-4 right-4 z-30">
-      <div
-        className="relative bg-gray-900/80 border border-white/20 rounded-lg overflow-hidden"
-        style={{ width: `${MINIMAP_SIZE.width}px`, height: `${MINIMAP_SIZE.height}px` }}
-      >
-        <div className="absolute inset-1 border border-white/10 rounded" />
-        <div
-          className="absolute inset-0 opacity-20"
-          style={{
-            backgroundImage: `
-              linear-gradient(to right, white 1px, transparent 1px),
-              linear-gradient(to bottom, white 1px, transparent 1px)
-            `,
-            backgroundSize: `${MINIMAP_SIZE.width / 6}px ${MINIMAP_SIZE.height / 6}px`,
-          }}
-        />
-        {playerDots}
-        <div className="absolute bottom-0.5 left-1 text-[8px] text-white/50">MAP</div>
-      </div>
+      <canvas
+        ref={canvasRef}
+        width={MINIMAP_SIZE}
+        height={MINIMAP_SIZE}
+        className="rounded-lg"
+      />
+      <div className="absolute bottom-0.5 left-1 text-[8px] text-white/50">MAP</div>
     </div>
   );
-}
+});

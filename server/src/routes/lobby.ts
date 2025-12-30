@@ -107,10 +107,14 @@ export function registerLobbyRoutes<T extends IGameRoom>(
       let room: T;
 
       if (code) {
-        // 코드로 입장
+        // 코드로 입장 - 사설방만 가능
         const foundRoom = roomManager.getRoomByCode(code);
         if (!foundRoom) {
           return reply.status(404).send({ error: '방을 찾을 수 없습니다.' });
+        }
+        // 공개방은 코드로 입장 불가
+        if (foundRoom.isPublic) {
+          return reply.status(400).send({ error: '공개방은 코드로 입장할 수 없습니다.' });
         }
         if (foundRoom.isFull()) {
           return reply.status(400).send({ error: '방이 가득 찼습니다.' });

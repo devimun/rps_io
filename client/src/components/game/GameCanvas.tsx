@@ -2,7 +2,7 @@
  * 게임 캔버스 컨테이너 컴포넌트
  * Phaser 게임을 React에 마운트합니다.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import Phaser from 'phaser';
 import { getGameConfig } from '../../game/config';
 import { useUIStore } from '../../stores/uiStore';
@@ -14,23 +14,16 @@ const SERVER_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3001';
 
 /**
  * 게임 캔버스 컴포넌트
- * Phaser 게임 인스턴스를 관리하고 서버와 연결합니다.
+ * memo로 불필요한 리렌더링 방지
  */
-export function GameCanvas() {
+export const GameCanvas = memo(function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
 
-  const { lowSpecMode } = useUIStore();
-  const {
-    roomId,
-    playerId,
-    nickname,
-    setConnectionStatus,
-    updatePlayers,
-    updateRankings,
-    setDeathInfo,
-    setPhase,
-  } = useGameStore();
+  const lowSpecMode = useUIStore((state) => state.lowSpecMode);
+  const roomId = useGameStore((state) => state.roomId);
+  const playerId = useGameStore((state) => state.playerId);
+  const nickname = useGameStore((state) => state.nickname);
 
   // Phaser 게임 초기화
   useEffect(() => {
@@ -54,7 +47,15 @@ export function GameCanvas() {
   useEffect(() => {
     if (!roomId || !playerId || !nickname) return;
 
-    const { setDashState } = useGameStore.getState();
+    const {
+      setConnectionStatus,
+      updatePlayers,
+      updateRankings,
+      setDeathInfo,
+      setPhase,
+      setDashState,
+      setTransformWarning,
+    } = useGameStore.getState();
 
     setConnectionStatus('connecting');
 
@@ -86,23 +87,20 @@ export function GameCanvas() {
           updateRankings(rankings);
         },
         onEliminated: (data) => {
-          setDeathInfo(data.eliminatorNickname, data.deathMessage);
+          setDeathInfo(data.eliminatorNickname, data.deathMessage, data.eliminatorRpsState, data.eliminatedRpsState);
         },
         onRoomClosed: (reason) => {
           console.log('[Socket] Room closed:', reason);
           setPhase('idle');
         },
         onDash: (data) => {
-          // 내 플레이어의 대시 상태만 업데이트
           const { myPlayer } = useGameStore.getState();
           if (myPlayer && data.playerId === myPlayer.id) {
             setDashState(data.isDashing, data.cooldownEndTime);
           }
         },
         onTransformWarning: (data) => {
-          const { setTransformWarning } = useGameStore.getState();
           setTransformWarning(data.timeRemaining);
-          // 변신 후 경고 상태 초기화
           setTimeout(() => {
             setTransformWarning(null);
           }, data.timeRemaining + 100);
@@ -114,7 +112,7 @@ export function GameCanvas() {
       socketService.disconnect();
       setConnectionStatus('disconnected');
     };
-  }, [roomId, playerId, nickname, setConnectionStatus, updatePlayers, updateRankings, setDeathInfo, setPhase]);
+  }, [roomId, playerId, nickname]);
 
   return (
     <div
@@ -124,4 +122,4 @@ export function GameCanvas() {
       style={{ touchAction: 'none' }}
     />
   );
-}
+});

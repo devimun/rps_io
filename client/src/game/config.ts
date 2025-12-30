@@ -34,6 +34,12 @@ export const GAME_CONFIG: Phaser.Types.Core.GameConfig = {
   audio: {
     disableWebAudio: false,
   },
+  // 키보드 이벤트 캡처 비활성화 (키 꾹 누를 때 렉 방지)
+  input: {
+    keyboard: {
+      capture: [], // 아무 키도 캡처하지 않음
+    },
+  },
   scene: [PreloadScene, MainScene],
 };
 

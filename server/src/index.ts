@@ -153,13 +153,15 @@ async function start(): Promise<void> {
             io.to(roomId).emit('game:state', state);
           });
 
-          room.setOnPlayerEliminated((winnerId, loserId) => {
+          room.setOnPlayerEliminated((winnerId, loserId, winnerRpsState, loserRpsState) => {
             const loserSocket = playerSocketMap.get(loserId);
             if (loserSocket) {
               io.to(loserSocket).emit('player:eliminated', {
                 eliminatedId: loserId,
                 eliminatorId: winnerId,
                 eliminatorNickname: room.getPlayer(winnerId)?.nickname || 'Unknown',
+                eliminatorRpsState: winnerRpsState,
+                eliminatedRpsState: loserRpsState,
                 deathMessage: '당신은 제거되었습니다!',
               });
             }

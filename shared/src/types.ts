@@ -41,6 +41,8 @@ export interface Player {
   y: number;
   /** 현재 가위바위보 상태 */
   rpsState: RPSState;
+  /** 다음 가위바위보 상태 (자기 자신만 볼 수 있음) */
+  nextRpsState?: RPSState;
   /** 현재 점수 */
   score: number;
   /** 현재 크기 (점수에 비례) */
@@ -200,6 +202,10 @@ export interface PlayerEliminatedEvent {
   eliminatorId: string;
   /** 제거한 플레이어 닉네임 */
   eliminatorNickname: string;
+  /** 제거한 플레이어의 RPS 상태 */
+  eliminatorRpsState: RPSState;
+  /** 제거된 플레이어의 RPS 상태 */
+  eliminatedRpsState: RPSState;
   /** 사망 메시지 */
   deathMessage: string;
 }

@@ -15,6 +15,8 @@ import { SlowBrowserWarning } from './components/ui/SlowBrowserWarning';
 import { Minimap } from './components/ui/Minimap';
 import { KillFeed } from './components/ui/KillFeed';
 import { FullscreenButton } from './components/ui/FullscreenButton';
+import { TransformTimer } from './components/ui/TransformTimer';
+import { InviteButtons } from './components/ui/InviteButtons';
 import { detectDevice } from './utils/deviceDetector';
 import type { SlowBrowserType } from './utils/deviceDetector';
 import { extractRoomCode } from './utils/shareUtils';
@@ -76,6 +78,8 @@ function App() {
       {(phase === 'playing' || phase === 'dead') && (
         <div className="relative w-full h-screen">
           <GameCanvas />
+          <TransformTimer />
+          <InviteButtons />
           <Ranking />
           <Minimap />
           <KillFeed />

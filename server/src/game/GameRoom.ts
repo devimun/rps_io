@@ -60,7 +60,7 @@ export class GameRoomEntity implements IGameRoom {
   private lastRankingUpdate: number = 0;
   private readonly RANKING_UPDATE_INTERVAL = 1000; // 1초마다 랭킹 업데이트
   private onStateChange?: (state: GameStateUpdate) => void;
-  private onPlayerEliminated?: (winnerId: string, loserId: string) => void;
+  private onPlayerEliminated?: (winnerId: string, loserId: string, winnerRpsState: RPSState, loserRpsState: RPSState) => void;
   private onDashEvent?: (event: DashEvent) => void;
   private onKillFeed?: (data: KillFeedData) => void;
   private onRankingUpdate?: (rankings: RankingEntry[]) => void;
@@ -80,7 +80,7 @@ export class GameRoomEntity implements IGameRoom {
   }
 
   setOnStateChange(callback: (state: GameStateUpdate) => void): void { this.onStateChange = callback; }
-  setOnPlayerEliminated(callback: (winnerId: string, loserId: string) => void): void { this.onPlayerEliminated = callback; }
+  setOnPlayerEliminated(callback: (winnerId: string, loserId: string, winnerRpsState: RPSState, loserRpsState: RPSState) => void): void { this.onPlayerEliminated = callback; }
   setOnDashEvent(callback: (event: DashEvent) => void): void { this.onDashEvent = callback; }
   setOnKillFeed(callback: (data: KillFeedData) => void): void { this.onKillFeed = callback; }
   setOnRankingUpdate(callback: (rankings: RankingEntry[]) => void): void { this.onRankingUpdate = callback; }
@@ -252,13 +252,10 @@ export class GameRoomEntity implements IGameRoom {
       if (player) player.setRPSState(event.newState);
     }
     
-    // 모든 플레이어의 lastTransformTime 업데이트 (클라이언트 타이머 표시용)
-    const transformTimes = this.transformSystem.getAllLastTransformTimes();
-    for (const [playerId, lastTransformTime] of transformTimes) {
-      const player = this.players.get(playerId);
-      if (player) {
-        player.lastTransformTime = lastTransformTime;
-      }
+    // 모든 플레이어의 lastTransformTime을 전역 시간으로 설정
+    const lastGlobalTime = this.transformSystem.getLastGlobalTransformTime();
+    for (const player of this.players.values()) {
+      player.lastTransformTime = lastGlobalTime;
     }
   }
 
@@ -269,9 +266,6 @@ export class GameRoomEntity implements IGameRoom {
       for (let j = i + 1; j < players.length; j++) {
         const p1 = players[i], p2 = players[j];
         if (toRemove.includes(p1.id) || toRemove.includes(p2.id)) continue;
-        
-        // 무적 상태인 플레이어는 충돌 무시
-        if (p1.isInvincible() || p2.isInvincible()) continue;
         
         if (!checkCollision(p1, p2)) continue;
         
@@ -288,13 +282,13 @@ export class GameRoomEntity implements IGameRoom {
       case CollisionResult.WIN:
         p1.addScore(p2.score + 10);
         toRemove.push(p2.id);
-        this.onPlayerEliminated?.(p1.id, p2.id);
+        this.onPlayerEliminated?.(p1.id, p2.id, p1.rpsState, p2.rpsState);
         this.emitKillFeed(p1, p2);
         break;
       case CollisionResult.LOSE:
         p2.addScore(p1.score + 10);
         toRemove.push(p1.id);
-        this.onPlayerEliminated?.(p2.id, p1.id);
+        this.onPlayerEliminated?.(p2.id, p1.id, p2.rpsState, p1.rpsState);
         this.emitKillFeed(p2, p1);
         break;
       case CollisionResult.DRAW:
@@ -330,7 +324,16 @@ export class GameRoomEntity implements IGameRoom {
 
   private broadcastState(): void {
     if (!this.onStateChange) return;
-    this.onStateChange({ players: this.getPlayers().map(p => p.toJSON()), timestamp: Date.now() });
+    
+    // 각 플레이어의 nextRpsState 포함
+    const playersWithNext = this.getPlayers().map(p => {
+      const json = p.toJSON();
+      // 자기 자신의 다음 상태 포함 (다른 플레이어 것은 클라이언트에서 필터링)
+      json.nextRpsState = this.transformSystem.getNextState(p.id);
+      return json;
+    });
+    
+    this.onStateChange({ players: playersWithNext, timestamp: Date.now() });
   }
 
   toJSON(): IGameRoom {

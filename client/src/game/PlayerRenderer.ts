@@ -4,7 +4,7 @@
  */
 import Phaser from 'phaser';
 import type { Player, RPSState } from '@chaos-rps/shared';
-import { SPAWN_INVINCIBILITY_MS, TRANSFORM_INTERVAL_MS, DASH_COOLDOWN_MS } from '@chaos-rps/shared';
+import { DASH_COOLDOWN_MS } from '@chaos-rps/shared';
 import { useGameStore } from '../stores/gameStore';
 
 /** RPS 상태별 색상 */
@@ -54,11 +54,6 @@ export class PlayerRenderer {
   createSprite(player: Player, isMe: boolean): Phaser.GameObjects.Container {
     const container = this.scene.add.container(player.x, player.y);
     const playerColor = PLAYER_COLORS[getPlayerColorIndex(player.nickname)];
-
-    // 변신 타이머 아크 (가장 뒤에 배치)
-    const timerArc = this.scene.add.graphics();
-    container.add(timerArc);
-    container.setData('timerArc', timerArc);
 
     // 본체 원
     const body = this.scene.add.graphics();
@@ -141,33 +136,37 @@ export class PlayerRenderer {
     const playerColor = container.getData('playerColor') as number;
     const rpsColor = RPS_COLORS[player.rpsState];
 
-    // 무적 상태 깜빡임
+    // 무적 상태 (깜빡임 없이 반투명)
     container.setAlpha(this.calculateInvincibilityAlpha(player));
 
-    // 변신 타이머 아크 (저사양 모드에서는 간소화)
-    if (!lowSpecMode) {
-      this.drawTransformTimerArc(container, player, interpolatedSize, rpsColor);
-    } else {
-      // 저사양 모드: 타이머 아크 숨김
-      const timerArc = container.getData('timerArc') as Phaser.GameObjects.Graphics;
-      timerArc?.clear();
+    // 상태 변경 감지 (불필요한 재렌더링 방지)
+    const lastRpsState = container.getData('lastRpsState') as string | undefined;
+    const lastSizeRounded = container.getData('lastSizeRounded') as number | undefined;
+    const sizeRounded = Math.round(interpolatedSize);
+    const stateChanged = lastRpsState !== player.rpsState || lastSizeRounded !== sizeRounded;
+
+    if (stateChanged) {
+      container.setData('lastRpsState', player.rpsState);
+      container.setData('lastSizeRounded', sizeRounded);
+
+      // 본체 그리기 (상태 변경 시에만)
+      this.drawBody(container, interpolatedSize, playerColor, rpsColor, isMe);
+
+      // 눈 그리기 (저사양 모드에서는 생략)
+      if (!lowSpecMode) {
+        this.drawEyes(container, interpolatedSize);
+      }
     }
 
-    // 본체 그리기
-    this.drawBody(container, interpolatedSize, playerColor, rpsColor, isMe);
+    // 텍스트 업데이트 (상태 변경 시에만)
+    if (stateChanged) {
+      const emojiText = container.getData('emojiText') as Phaser.GameObjects.Text;
+      emojiText.setText(RPS_EMOJI[player.rpsState]);
+      emojiText.setY(-interpolatedSize - 15);
 
-    // 눈 그리기 (저사양 모드에서는 간소화)
-    if (!lowSpecMode) {
-      this.drawEyes(container, interpolatedSize);
+      const nameText = container.getData('nameText') as Phaser.GameObjects.Text;
+      nameText.setY(-interpolatedSize - 40);
     }
-
-    // 텍스트 업데이트
-    const emojiText = container.getData('emojiText') as Phaser.GameObjects.Text;
-    emojiText.setText(RPS_EMOJI[player.rpsState]);
-    emojiText.setY(-interpolatedSize - 15);
-
-    const nameText = container.getData('nameText') as Phaser.GameObjects.Text;
-    nameText.setY(-interpolatedSize - 40);
 
     // 대시바 업데이트 (내 플레이어만)
     if (isMe) {
@@ -222,72 +221,20 @@ export class PlayerRenderer {
   }
 
   /**
-   * 변신 타이머 아크 그리기
+   * 알파값 계산 (무적 시스템 제거됨 - 항상 1 반환)
    */
-  private drawTransformTimerArc(
-    container: Phaser.GameObjects.Container,
-    player: Player,
-    size: number,
-    rpsColor: number
-  ): void {
-    const timerArc = container.getData('timerArc') as Phaser.GameObjects.Graphics;
-    timerArc.clear();
-
-    if (!player.lastTransformTime) return;
-
-    const elapsed = Date.now() - player.lastTransformTime;
-    const progress = Math.min(elapsed / TRANSFORM_INTERVAL_MS, 1);
-    const arcRadius = size + 10;
-    const arcWidth = 4;
-
-    // 배경 원
-    timerArc.lineStyle(arcWidth, 0x333333, 0.5);
-    timerArc.strokeCircle(0, 0, arcRadius);
-
-    // 진행률 아크
-    if (progress > 0) {
-      const startAngle = -Math.PI / 2;
-      const endAngle = startAngle + (progress * Math.PI * 2);
-      timerArc.lineStyle(arcWidth, rpsColor, 0.9);
-      timerArc.beginPath();
-      timerArc.arc(0, 0, arcRadius, startAngle, endAngle, false);
-      timerArc.strokePath();
-    }
-
-    // 변신 임박 깜빡임 (마지막 0.3초)
-    const remaining = TRANSFORM_INTERVAL_MS - elapsed;
-    if (remaining > 0 && remaining < 300) {
-      if (Math.floor(Date.now() / 100) % 2 === 0) {
-        timerArc.lineStyle(arcWidth + 2, 0xffffff, 0.8);
-        timerArc.strokeCircle(0, 0, arcRadius);
-      }
-    }
-  }
-
-  /**
-   * 무적 상태 알파값 계산 (깜빡임 없이 반투명)
-   */
-  private calculateInvincibilityAlpha(player: Player): number {
-    if (!player.spawnTime) return 1;
-
-    const elapsed = Date.now() - player.spawnTime;
-    const remaining = SPAWN_INVINCIBILITY_MS - elapsed;
-
-    if (remaining <= 0) return 1;
-
-    // 무적 상태: 반투명 (깜빡임 없음)
-    return 0.6;
+  private calculateInvincibilityAlpha(_player: Player): number {
+    return 1;
   }
 
   /**
    * 대시바 그리기 (플레이어 아래에 표시)
+   * 성능 최적화: 상태 변경 시에만 다시 그림
    */
   private drawDashBar(container: Phaser.GameObjects.Container, size: number): void {
     const dashBar = container.getData('dashBar') as Phaser.GameObjects.Graphics;
     const boostText = container.getData('boostText') as Phaser.GameObjects.Text;
     if (!dashBar) return;
-
-    dashBar.clear();
 
     const { isDashing, dashCooldownEndTime } = useGameStore.getState();
     const barWidth = 50;
@@ -302,6 +249,22 @@ export class PlayerRenderer {
     if (remaining > 0) {
       progress = (DASH_COOLDOWN_MS - remaining) / DASH_COOLDOWN_MS;
     }
+
+    // 상태 캐싱: 변경 없으면 스킵
+    const lastProgress = container.getData('lastDashProgress') as number | undefined;
+    const lastIsDashing = container.getData('lastIsDashing') as boolean | undefined;
+    const progressRounded = Math.round(progress * 20) / 20; // 5% 단위로 반올림
+    
+    if (lastProgress === progressRounded && lastIsDashing === isDashing) {
+      // 위치만 업데이트
+      if (boostText) boostText.setY(size + 32);
+      return;
+    }
+    
+    container.setData('lastDashProgress', progressRounded);
+    container.setData('lastIsDashing', isDashing);
+
+    dashBar.clear();
 
     // 배경 바
     dashBar.fillStyle(0x333333, 0.8);

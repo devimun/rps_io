@@ -9,8 +9,8 @@ export const MAX_PLAYERS_PER_ROOM = 20;
 /** 게임 룸 최대 인원 (별칭) */
 export const ROOM_MAX_PLAYERS = MAX_PLAYERS_PER_ROOM;
 
-/** 변신 주기 (밀리초) - 3초 */
-export const TRANSFORM_INTERVAL_MS = 3000;
+/** 변신 주기 (밀리초) - 4초 (전체 동기화) */
+export const TRANSFORM_INTERVAL_MS = 4000;
 
 /** 변신 예고 시간 (밀리초) */
 export const TRANSFORM_WARNING_MS = 500;

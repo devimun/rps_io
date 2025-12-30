@@ -25,6 +25,10 @@ function isMobileDevice(): boolean {
   ) || ('ontouchstart' in window);
 }
 
+/** 마지막 대시 요청 시간 (클라이언트 쓰로틀링) */
+let lastDashRequestTime = 0;
+const DASH_REQUEST_THROTTLE = 100; // 100ms 쓰로틀링
+
 /**
  * 대시 가능 여부 확인 (클라이언트 측 체크)
  */
@@ -36,10 +40,16 @@ function canDash(): boolean {
 }
 
 /**
- * 대시 요청 (상태 체크 후 전송)
+ * 대시 요청 (상태 체크 + 쓰로틀링 후 전송)
  */
 function tryDash(): void {
+  const now = Date.now();
+  
+  // 클라이언트 쓰로틀링: 너무 빠른 연속 요청 방지
+  if (now - lastDashRequestTime < DASH_REQUEST_THROTTLE) return;
+  
   if (canDash()) {
+    lastDashRequestTime = now;
     socketService.sendDash();
   }
 }
@@ -51,14 +61,10 @@ export class MainScene extends Phaser.Scene {
   private playerSprites: Map<string, Phaser.GameObjects.Container> = new Map();
   private lastMoveTime = 0;
   private readonly moveInterval = 50;
-  private cameraInitialized = false;
   private virtualJoystick: VirtualJoystick | null = null;
   private boostButton: BoostButton | null = null;
   private isMobile = false;
   private playerRenderer!: PlayerRenderer;
-  
-  /** 스페이스바 눌림 상태 추적 (키 반복 방지) */
-  private spaceKeyPressed = false;
 
   constructor() {
     super({ key: SCENE_KEYS.MAIN });
@@ -91,7 +97,7 @@ export class MainScene extends Phaser.Scene {
    */
   private createGrid(): void {
     const graphics = this.add.graphics();
-    const gridSize = this.isMobile ? 200 : 100; // 모바일: 그리드 간격 증가
+    const gridSize = this.isMobile ? 200 : 100;
 
     // 점 패턴 배경 (모바일에서는 간소화)
     if (!this.isMobile) {
@@ -150,13 +156,9 @@ export class MainScene extends Phaser.Scene {
     this.input.on('pointermove', this.handlePointerMove, this);
     this.input.on('pointerdown', this.handlePointerDown, this);
     
-    // 스페이스바: keydown/keyup으로 직접 처리 (키 반복 방지)
-    this.input.keyboard?.on('keydown-SPACE', this.onSpaceDown, this);
-    this.input.keyboard?.on('keyup-SPACE', this.onSpaceUp, this);
-    
-    // 마우스 우클릭으로 즉시 대시
+    // 대시: 마우스 클릭 (PC)
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.rightButtonDown()) {
+      if (!this.isMobile && (pointer.leftButtonDown() || pointer.rightButtonDown())) {
         tryDash();
       }
     });
@@ -169,31 +171,8 @@ export class MainScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * 스페이스바 눌림 (키 반복 방지)
-   */
-  private onSpaceDown(): void {
-    // 이미 눌린 상태면 무시 (키 반복 방지)
-    if (this.spaceKeyPressed) return;
-    
-    this.spaceKeyPressed = true;
-    tryDash();
-  }
-
-  /**
-   * 스페이스바 뗌
-   */
-  private onSpaceUp(): void {
-    this.spaceKeyPressed = false;
-  }
-
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.isMobile) {
-      // 모바일: 조이스틱/부스트 버튼 영역 외 터치는 무시
-      return;
-    }
-
-    // PC: 좌클릭은 이동만
+    if (this.isMobile) return;
     this.handlePointerMove(pointer);
   }
 
@@ -245,7 +224,6 @@ export class MainScene extends Phaser.Scene {
     const { lowSpecMode } = useUIStore.getState();
     const myPlayerId = myPlayer?.id ?? null;
 
-    // 모바일 부스트 버튼 업데이트
     if (this.boostButton) {
       this.boostButton.update();
     }
@@ -259,7 +237,7 @@ export class MainScene extends Phaser.Scene {
     myPlayerId: string | null,
     lowSpecMode: boolean
   ): void {
-    // 사라진 플레이어 제거 (사망 애니메이션)
+    // 사라진 플레이어 제거
     this.playerSprites.forEach((container, id) => {
       if (!players.has(id)) {
         this.tweens.add({
@@ -293,12 +271,7 @@ export class MainScene extends Phaser.Scene {
 
     const container = this.playerSprites.get(playerId);
     if (container) {
-      if (!this.cameraInitialized) {
-        this.cameras.main.centerOn(container.x, container.y);
-        this.cameraInitialized = true;
-      } else {
-        this.cameras.main.centerOn(container.x, container.y);
-      }
+      this.cameras.main.centerOn(container.x, container.y);
     }
   }
 
@@ -307,10 +280,6 @@ export class MainScene extends Phaser.Scene {
     this.playerSprites.clear();
     this.input.off('pointermove', this.handlePointerMove, this);
     this.input.off('pointerdown', this.handlePointerMove, this);
-    
-    // 키보드 이벤트 정리
-    this.input.keyboard?.off('keydown-SPACE', this.onSpaceDown, this);
-    this.input.keyboard?.off('keyup-SPACE', this.onSpaceUp, this);
     
     if (this.virtualJoystick) {
       this.virtualJoystick.destroy();

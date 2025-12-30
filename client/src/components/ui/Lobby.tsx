@@ -89,7 +89,7 @@ export function Lobby({ initialRoomCode }: LobbyProps) {
       if (!response.ok) throw new Error('Failed to create');
 
       const data = await response.json();
-      setRoomInfo(data.roomId, data.code, data.playerId, nickname);
+      setRoomInfo(data.roomId, data.code, data.playerId, nickname, true); // 사설방
       setPhase('playing');
     } catch {
       setError(t('error.connectionFailed', language));
@@ -127,7 +127,7 @@ export function Lobby({ initialRoomCode }: LobbyProps) {
       }
 
       const data = await response.json();
-      setRoomInfo(data.roomId, roomCode.toUpperCase(), data.playerId, nickname);
+      setRoomInfo(data.roomId, roomCode.toUpperCase(), data.playerId, nickname, true); // 사설방 (코드 입장)
       setPhase('playing');
     } catch (err) {
       const message = err instanceof Error ? err.message : t('error.roomNotFound', language);

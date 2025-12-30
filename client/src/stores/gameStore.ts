@@ -19,6 +19,7 @@ interface GameState {
   roomCode: string | null;
   playerId: string | null;
   nickname: string | null;
+  isPrivateRoom: boolean; // 사설방 여부 (코드로 입장하는 방)
 
   // 게임 상태
   phase: GamePhase;
@@ -37,6 +38,8 @@ interface GameState {
 
   // 사망 정보
   eliminatorNickname: string | null;
+  eliminatorRpsState: RPSState | null;
+  eliminatedRpsState: RPSState | null;
   deathMessage: string | null;
 }
 
@@ -44,7 +47,7 @@ interface GameState {
 interface GameActions {
   // 연결 관련
   setConnectionStatus: (status: ConnectionStatus) => void;
-  setRoomInfo: (roomId: string, roomCode: string, playerId: string, nickname: string) => void;
+  setRoomInfo: (roomId: string, roomCode: string, playerId: string, nickname: string, isPrivate?: boolean) => void;
   clearRoomInfo: () => void;
 
   // 게임 상태 관련
@@ -62,7 +65,7 @@ interface GameActions {
   setDashState: (isDashing: boolean, cooldownEndTime: number) => void;
 
   // 사망 관련
-  setDeathInfo: (eliminatorNickname: string, deathMessage: string) => void;
+  setDeathInfo: (eliminatorNickname: string, deathMessage: string, eliminatorRpsState?: RPSState, eliminatedRpsState?: RPSState) => void;
   clearDeathInfo: () => void;
 
   // 리셋
@@ -76,6 +79,7 @@ const initialState: GameState = {
   roomCode: null,
   playerId: null,
   nickname: null,
+  isPrivateRoom: false,
   phase: 'idle',
   players: new Map(),
   rankings: [],
@@ -86,6 +90,8 @@ const initialState: GameState = {
   isDashing: false,
   dashCooldownEndTime: 0,
   eliminatorNickname: null,
+  eliminatorRpsState: null,
+  eliminatedRpsState: null,
   deathMessage: null,
 };
 
@@ -98,11 +104,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   setConnectionStatus: (status) => set({ connectionStatus: status }),
 
-  setRoomInfo: (roomId, roomCode, playerId, nickname) =>
-    set({ roomId, roomCode, playerId, nickname, phase: 'lobby' }),
+  setRoomInfo: (roomId, roomCode, playerId, nickname, isPrivate = false) =>
+    set({ roomId, roomCode, playerId, nickname, isPrivateRoom: isPrivate, phase: 'lobby' }),
 
   clearRoomInfo: () =>
-    set({ roomId: null, roomCode: null, playerId: null, nickname: null, phase: 'idle' }),
+    set({ roomId: null, roomCode: null, playerId: null, nickname: null, isPrivateRoom: false, phase: 'idle' }),
 
   setPhase: (phase) => set({ phase }),
 
@@ -148,11 +154,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   setDashState: (isDashing, cooldownEndTime) =>
     set({ isDashing, dashCooldownEndTime: cooldownEndTime }),
 
-  setDeathInfo: (eliminatorNickname, deathMessage) =>
-    set({ eliminatorNickname, deathMessage, phase: 'dead' }),
+  setDeathInfo: (eliminatorNickname, deathMessage, eliminatorRpsState, eliminatedRpsState) =>
+    set({ eliminatorNickname, deathMessage, eliminatorRpsState: eliminatorRpsState ?? null, eliminatedRpsState: eliminatedRpsState ?? null, phase: 'dead' }),
 
   clearDeathInfo: () =>
-    set({ eliminatorNickname: null, deathMessage: null }),
+    set({ eliminatorNickname: null, deathMessage: null, eliminatorRpsState: null, eliminatedRpsState: null }),
 
   reset: () => set(initialState),
 }));
