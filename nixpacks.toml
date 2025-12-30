@@ -1,0 +1,21 @@
+# Railway/Nixpacks 빌드 설정
+# pnpm v9+ lockfile 호환성 문제 해결을 위한 corepack 설정
+
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_18", "openssl"]
+
+[phases.install]
+cmds = [
+    "npm install -g corepack",
+    "corepack enable",
+    "corepack prepare pnpm@latest --activate",
+    "pnpm install --no-frozen-lockfile"
+]
+
+[phases.build]
+cmds = ["pnpm build:server"]
+
+[start]
+cmd = "pnpm start"

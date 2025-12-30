@@ -1,0 +1,32 @@
+{
+  "name": "@chaos-rps/server",
+  "version": "1.0.0",
+  "description": "ChaosRPS.io 게임 서버",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "NODE_ENV=production tsx src/index.ts",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@chaos-rps/shared": "workspace:*",
+    "@fastify/cors": "^8.4.0",
+    "fastify": "^4.24.0",
+    "socket.io": "^4.7.0",
+    "tsx": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.55.0",
+    "fast-check": "^3.23.2",
+    "pino-pretty": "^10.3.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  }
+}
