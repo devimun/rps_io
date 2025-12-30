@@ -3,7 +3,14 @@
  * 앱 버전, 업데이트 로그, 공지사항을 표시합니다.
  */
 import { useState, memo } from 'react';
-import { APP_VERSION, UPDATE_LOGS, getActiveNotices } from '../../config/version';
+import { createPortal } from 'react-dom';
+import { 
+  APP_VERSION, 
+  UPDATE_LOGS, 
+  getActiveNotices, 
+  getLocalizedText,
+  type Notice 
+} from '../../config/version';
 import { useUIStore } from '../../stores/uiStore';
 
 type ModalType = 'updates' | 'notices' | null;
@@ -20,7 +27,6 @@ export const VersionInfo = memo(function VersionInfo() {
     <>
       {/* 버전 정보 영역 */}
       <div className="flex flex-col items-center gap-2 mb-4">
-        {/* 버전 텍스트 (크기 증가) */}
         <span className="text-slate-400 text-sm font-medium">
           v{APP_VERSION}
         </span>
@@ -47,14 +53,15 @@ export const VersionInfo = memo(function VersionInfo() {
         </div>
       </div>
 
-      {/* 모달 */}
-      {openModal && (
+      {/* 모달 - Portal로 body에 렌더링 */}
+      {openModal && createPortal(
         <InfoModal
           type={openModal}
           language={language}
           activeNotices={activeNotices}
           onClose={() => setOpenModal(null)}
-        />
+        />,
+        document.body
       )}
     </>
   );
@@ -69,31 +76,32 @@ function InfoModal({
 }: {
   type: 'updates' | 'notices';
   language: string;
-  activeNotices: ReturnType<typeof getActiveNotices>;
+  activeNotices: Notice[];
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <article className="bg-slate-800 rounded-xl w-full max-w-md max-h-[80vh] flex flex-col">
-        {/* 헤더 */}
+    <div 
+      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+      onClick={onClose}
+    >
+      <article 
+        className="bg-slate-800 rounded-xl w-[600px] max-w-[95%] h-[500px] max-h-[90%] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className="flex items-center justify-between p-4 border-b border-slate-700">
           <h2 className="text-lg font-bold text-white">
             {type === 'updates'
               ? language === 'ko' ? '업데이트' : 'Update History'
               : language === 'ko' ? '공지사항' : 'Notices'}
           </h2>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white text-xl"
-          >
+          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl">
             ✕
           </button>
         </header>
 
-        {/* 콘텐츠 */}
         <div className="flex-1 overflow-y-auto p-4">
           {type === 'updates' ? (
-            <UpdatesContent />
+            <UpdatesContent language={language} />
           ) : (
             <NoticesContent language={language} notices={activeNotices} />
           )}
@@ -104,13 +112,13 @@ function InfoModal({
 }
 
 /** 업데이트 내용 */
-function UpdatesContent() {
+function UpdatesContent({ language }: { language: string }) {
   return (
     <div className="space-y-4">
       {UPDATE_LOGS.map((log) => (
         <section key={log.version} className="bg-slate-900/50 rounded-lg p-3">
           <header className="flex items-center justify-between mb-2">
-            <h3 className="font-bold text-white">{log.title}</h3>
+            <h3 className="font-bold text-white">{getLocalizedText(log.title, language)}</h3>
             <span className="text-xs text-slate-500">v{log.version}</span>
           </header>
           <time className="text-xs text-slate-500 block mb-2">{log.date}</time>
@@ -118,7 +126,7 @@ function UpdatesContent() {
             {log.changes.map((change, idx) => (
               <li key={idx} className="text-sm text-slate-300 flex items-start gap-2">
                 <span className="text-cyan-400">•</span>
-                {change}
+                {getLocalizedText(change, language)}
               </li>
             ))}
           </ul>
@@ -129,13 +137,7 @@ function UpdatesContent() {
 }
 
 /** 공지사항 내용 */
-function NoticesContent({ 
-  language, 
-  notices 
-}: { 
-  language: string; 
-  notices: ReturnType<typeof getActiveNotices>;
-}) {
+function NoticesContent({ language, notices }: { language: string; notices: Notice[] }) {
   if (notices.length === 0) {
     return (
       <p className="text-slate-500 text-center py-8">
@@ -157,8 +159,8 @@ function NoticesContent({
               : 'bg-slate-900/50'
           }`}
         >
-          <h3 className="font-bold text-white mb-1">{notice.title}</h3>
-          <p className="text-sm text-slate-300">{notice.content}</p>
+          <h3 className="font-bold text-white mb-1">{getLocalizedText(notice.title, language)}</h3>
+          <p className="text-sm text-slate-300">{getLocalizedText(notice.content, language)}</p>
         </article>
       ))}
     </div>

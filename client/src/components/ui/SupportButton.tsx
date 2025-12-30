@@ -9,10 +9,15 @@ import { useUIStore } from '../../stores/uiStore';
 /** Buy Me a Coffee 사용자명 (환경 변수 또는 기본값) */
 const BMC_USERNAME = import.meta.env.VITE_BMC_USERNAME || 'chaosrps';
 
+interface SupportButtonProps {
+  /** 전체 너비로 표시할지 여부 */
+  fullWidth?: boolean;
+}
+
 /**
  * 후원 버튼 컴포넌트
  */
-export const SupportButton = memo(function SupportButton() {
+export const SupportButton = memo(function SupportButton({ fullWidth = false }: SupportButtonProps) {
   const language = useUIStore((state) => state.language);
 
   const handleClick = () => {
@@ -22,13 +27,14 @@ export const SupportButton = memo(function SupportButton() {
   return (
     <button
       onClick={handleClick}
-      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#FFDD00] hover:bg-[#ffcc00] 
-                 text-black text-sm font-medium transition-colors shadow-lg"
+      className={`flex items-center justify-center gap-2 rounded-lg bg-[#FFDD00] hover:bg-[#ffcc00] 
+                 text-black font-medium transition-colors shadow-lg
+                 ${fullWidth ? 'w-full py-3 text-base' : 'px-3 py-2 text-sm'}`}
       aria-label={language === 'ko' ? '개발자 후원하기' : 'Support the developer'}
     >
       <CoffeeIcon />
-      <span className="hidden sm:inline">
-        {language === 'ko' ? '커피 사주기' : 'Buy me a coffee'}
+      <span>
+        {language === 'ko' ? '☕ 개발자에게 커피 사주기' : '☕ Buy me a coffee'}
       </span>
     </button>
   );
