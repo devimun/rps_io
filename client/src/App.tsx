@@ -20,6 +20,7 @@ import { InviteButtons } from './components/ui/InviteButtons';
 import { detectDevice } from './utils/deviceDetector';
 import type { SlowBrowserType } from './utils/deviceDetector';
 import { extractRoomCode } from './utils/shareUtils';
+import { initAnalytics } from './services/analytics';
 
 /**
  * 메인 앱 컴포넌트
@@ -39,8 +40,11 @@ function App() {
   /** 저성능 브라우저 타입 */
   const [slowBrowserType, setSlowBrowserType] = useState<SlowBrowserType>(null);
 
-  // 초기화: 기기 감지 및 URL 파라미터 처리
+  // 초기화: 기기 감지, URL 파라미터 처리, 분석 초기화
   useEffect(() => {
+    // GA4 분석 초기화
+    initAnalytics();
+
     const deviceInfo = detectDevice();
 
     // 인앱 브라우저 감지

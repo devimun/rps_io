@@ -8,6 +8,7 @@ import { getGameConfig } from '../../game/config';
 import { useUIStore } from '../../stores/uiStore';
 import { useGameStore } from '../../stores/gameStore';
 import { socketService } from '../../services/socketService';
+import { trackGameStart } from '../../services/analytics';
 
 /** 서버 URL */
 const SERVER_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3001';
@@ -24,6 +25,7 @@ export const GameCanvas = memo(function GameCanvas() {
   const roomId = useGameStore((state) => state.roomId);
   const playerId = useGameStore((state) => state.playerId);
   const nickname = useGameStore((state) => state.nickname);
+  const isPrivateRoom = useGameStore((state) => state.isPrivateRoom);
 
   // Phaser 게임 초기화
   useEffect(() => {
@@ -71,6 +73,8 @@ export const GameCanvas = memo(function GameCanvas() {
         onConnect: () => {
           setConnectionStatus('connected');
           socketService.sendReady();
+          // 게임 시작 이벤트 트래킹
+          trackGameStart(isPrivateRoom ? 'private' : 'public');
         },
         onDisconnect: (reason) => {
           setConnectionStatus('disconnected');

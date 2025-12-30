@@ -3,11 +3,12 @@
  * 플레이어가 제거되었을 때 표시되는 화면입니다.
  * 사망 애니메이션 후 표시됩니다.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../../stores/gameStore';
 import { useUIStore } from '../../stores/uiStore';
 import { t } from '../../utils/i18n';
 import { createShareMetadata, shareViaWebAPI, copyToClipboard, isWebShareSupported } from '../../utils/shareUtils';
+import { trackGameEnd, trackPlayAgain, trackShare } from '../../services/analytics';
 import { RPSState } from '@chaos-rps/shared';
 
 const DEATH_SCREEN_DELAY = 1500;
@@ -35,24 +36,37 @@ const getRpsName = (state: RPSState | null, language: string): string => {
 export function DeathScreen() {
   const { 
     eliminatorNickname, eliminatorRpsState, eliminatedRpsState, 
-    deathMessage, roomCode, nickname,
+    deathMessage, roomCode, nickname, isPrivateRoom,
     clearDeathInfo, setRoomInfo, setPhase, reset 
   } = useGameStore();
   const { language, setError, setLoading } = useUIStore();
   const [showScreen, setShowScreen] = useState(false);
   const [fadeIn, setFadeIn] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  
+  // 게임 시작 시간 기록 (게임 종료 이벤트용)
+  const gameStartTimeRef = useRef<number>(Date.now());
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowScreen(true);
       requestAnimationFrame(() => setFadeIn(true));
+      
+      // 게임 종료 이벤트 트래킹
+      const playTimeSeconds = Math.floor((Date.now() - gameStartTimeRef.current) / 1000);
+      trackGameEnd({
+        playTimeSeconds,
+        finalScore: 0, // 현재 점수 시스템 없음
+        killCount: 0,  // 킬 카운트 추적 필요 시 추가
+        roomType: isPrivateRoom ? 'private' : 'public',
+      });
     }, DEATH_SCREEN_DELAY);
     return () => clearTimeout(timer);
-  }, []);
+  }, [isPrivateRoom]);
 
   const handleShare = async () => {
     const metadata = createShareMetadata(roomCode ?? undefined);
+    trackShare('link');
     if (isWebShareSupported()) {
       await shareViaWebAPI(metadata);
     } else {
@@ -70,6 +84,7 @@ export function DeathScreen() {
     setIsJoining(true);
     setLoading(true, t('common.loading', language));
     clearDeathInfo();
+    trackPlayAgain();
     try {
       const response = await fetch(`${API_BASE_URL}/rooms/join`, {
         method: 'POST',

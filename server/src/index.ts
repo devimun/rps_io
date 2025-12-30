@@ -11,6 +11,7 @@ import { RoomManager } from './managers/RoomManager';
 import { MatchManager } from './managers/MatchManager';
 import { GameRoomEntity } from './game/GameRoom';
 import { registerLobbyRoutes } from './routes/lobby';
+import { StatsService } from './services/StatsService';
 import type { ClientToServerEvents, ServerToClientEvents } from '@chaos-rps/shared';
 
 /** 서버 설정 */
@@ -78,6 +79,11 @@ function setupHealthCheck(): void {
       timestamp: Date.now()
     };
   });
+
+  // 서버 통계 API
+  fastify.get('/stats', async () => {
+    return StatsService.getStats();
+  });
 }
 
 /**
@@ -111,9 +117,11 @@ async function start(): Promise<void> {
       const { roomId, playerId, nickname } = socket.handshake.query as { roomId?: string; playerId?: string; nickname?: string };
       
       console.log(`🔌 클라이언트 연결: ${socket.id}, roomId: ${roomId}, playerId: ${playerId}, nickname: ${nickname}`);
+      StatsService.playerConnected();
 
       if (!roomId || !playerId || !nickname) {
         console.log(`❌ 연결 거부: roomId, playerId 또는 nickname 누락`);
+        StatsService.playerDisconnected();
         socket.disconnect();
         return;
       }
@@ -122,6 +130,7 @@ async function start(): Promise<void> {
       const room = roomManager.getRoomById(roomId);
       if (!room) {
         console.log(`❌ 연결 거부: 룸을 찾을 수 없음 (${roomId})`);
+        StatsService.playerDisconnected();
         socket.emit('room:closed', '방을 찾을 수 없습니다.');
         socket.disconnect();
         return;

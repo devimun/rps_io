@@ -5,6 +5,7 @@
 import { useState, memo } from 'react';
 import { useGameStore } from '../../stores/gameStore';
 import { createShareMetadata, copyToClipboard } from '../../utils/shareUtils';
+import { trackShare } from '../../services/analytics';
 
 /**
  * 초대 버튼 컴포넌트
@@ -22,6 +23,7 @@ export const InviteButtons = memo(function InviteButtons() {
   const handleCopyCode = async () => {
     const success = await copyToClipboard(roomCode);
     if (success) {
+      trackShare('code');
       setCopiedCode(true);
       setTimeout(() => setCopiedCode(false), 2000);
     }
@@ -32,6 +34,7 @@ export const InviteButtons = memo(function InviteButtons() {
     const metadata = createShareMetadata(roomCode);
     const success = await copyToClipboard(metadata.url);
     if (success) {
+      trackShare('link');
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
     }

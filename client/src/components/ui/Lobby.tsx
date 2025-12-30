@@ -6,6 +6,8 @@ import { useState, useEffect } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { useGameStore } from '../../stores/gameStore';
 import { t } from '../../utils/i18n';
+import { VersionInfo } from './VersionInfo';
+import { SupportButton } from './SupportButton';
 
 /** API 기본 URL */
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -139,7 +141,12 @@ export function Lobby({ initialRoomCode }: LobbyProps) {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col items-center justify-center p-4">
+    <main className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col items-center justify-center p-4 relative">
+      {/* 상단 우측: 후원 버튼 */}
+      <div className="absolute top-4 right-4">
+        <SupportButton />
+      </div>
+
       {/* 타이틀 */}
       <header className="text-center mb-8">
         <h1 className="text-5xl font-bold text-white mb-2">{t('lobby.title', language)}</h1>
@@ -258,6 +265,11 @@ export function Lobby({ initialRoomCode }: LobbyProps) {
           </div>
         </div>
       )}
+
+      {/* 하단: 버전 정보 (위치 조정) */}
+      <footer className="absolute bottom-8 left-1/2 -translate-x-1/2">
+        <VersionInfo />
+      </footer>
     </main>
   );
 }

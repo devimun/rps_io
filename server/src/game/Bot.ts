@@ -213,18 +213,74 @@ export class BotEntity extends PlayerEntity {
   }
 }
 
-/** 봇 이름 생성용 접두사 */
-const BOT_NAME_PREFIXES = ['Bot', 'AI', 'NPC', 'CPU'];
+/**
+ * 실제 플레이어처럼 보이는 봇 닉네임 풀
+ * 다양한 스타일의 닉네임을 포함합니다.
+ */
+const BOT_NICKNAMES = [
+  // 영어 닉네임 (게이머 스타일)
+  'Shadow', 'Phoenix', 'Storm', 'Blaze', 'Frost', 'Thunder', 'Viper', 'Wolf',
+  'Dragon', 'Ninja', 'Hawk', 'Tiger', 'Lion', 'Bear', 'Eagle', 'Shark',
+  'Ace', 'King', 'Queen', 'Jack', 'Joker', 'Knight', 'Rogue', 'Mage',
+  'Hunter', 'Sniper', 'Tank', 'Healer', 'Warrior', 'Archer', 'Wizard', 'Paladin',
+  // 숫자 조합 스타일
+  'Pro123', 'Gamer99', 'Player1', 'NoobKing', 'MVP2024', 'Legend77', 'Master42',
+  'Elite88', 'Boss666', 'Hero007', 'Star555', 'Flash99', 'Speed100', 'Power50',
+  // 재미있는 닉네임
+  'Potato', 'Banana', 'Cookie', 'Noodle', 'Pickle', 'Waffle', 'Taco', 'Pizza',
+  'Sushi', 'Ramen', 'Burger', 'Donut', 'Mochi', 'Kimchi', 'Tofu', 'Curry',
+  // 감정/상태 표현
+  'Sleepy', 'Hungry', 'Happy', 'Angry', 'Chill', 'Hyper', 'Lazy', 'Crazy',
+  'Lucky', 'Unlucky', 'Brave', 'Sneaky', 'Speedy', 'Mighty', 'Tiny', 'Giant',
+  // 한국어 로마자 스타일
+  'Daebak', 'Hwaiting', 'Jjang', 'Oppa', 'Noona', 'Hyung', 'Unnie', 'Maknae',
+  'Aegyo', 'Bbang', 'Chikin', 'Ramyun', 'Soju', 'Makgeolli', 'Tteok', 'Gimbap',
+  // 동물 + 형용사
+  'FastCat', 'SlowDog', 'BigBird', 'SmolFish', 'CoolFox', 'HotBear', 'IcyWolf',
+  'FireAnt', 'WaterBug', 'WindOwl', 'EarthMole', 'SkyHawk', 'SeaShark', 'MoonBat',
+  // 색상 + 명사
+  'RedStar', 'BlueMoon', 'GreenLeaf', 'YellowSun', 'PinkRose', 'BlackNight',
+  'WhiteSnow', 'GoldCoin', 'SilverKey', 'PurpleGem', 'OrangeJuice', 'CyanWave',
+  // 직업/역할
+  'Chef', 'Doctor', 'Pilot', 'Artist', 'Coder', 'Gamer', 'Streamer', 'Singer',
+  'Dancer', 'Writer', 'Builder', 'Farmer', 'Fisher', 'Miner', 'Trader', 'Racer',
+  // 신화/판타지
+  'Zeus', 'Odin', 'Thor', 'Loki', 'Athena', 'Apollo', 'Hades', 'Poseidon',
+  'Merlin', 'Arthur', 'Gandalf', 'Frodo', 'Legolas', 'Gimli', 'Aragorn', 'Sauron',
+  // 우주/과학
+  'Cosmos', 'Galaxy', 'Nebula', 'Quasar', 'Pulsar', 'Nova', 'Comet', 'Meteor',
+  'Atom', 'Proton', 'Neutron', 'Photon', 'Quantum', 'Plasma', 'Fusion', 'Laser',
+];
 
-/** 봇 이름 생성용 접미사 */
-const BOT_NAME_SUFFIXES = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Omega'];
+/** 사용된 닉네임 추적 (중복 방지) */
+const usedNicknames = new Set<string>();
 
 /**
  * 랜덤 봇 이름을 생성합니다.
+ * 실제 플레이어처럼 보이는 다양한 닉네임을 반환합니다.
  */
 export function generateBotName(): string {
-  const prefix = BOT_NAME_PREFIXES[Math.floor(Math.random() * BOT_NAME_PREFIXES.length)];
-  const suffix = BOT_NAME_SUFFIXES[Math.floor(Math.random() * BOT_NAME_SUFFIXES.length)];
-  const num = Math.floor(Math.random() * 100);
-  return `${prefix}${suffix}${num}`;
+  // 사용 가능한 닉네임 찾기
+  const availableNames = BOT_NICKNAMES.filter(name => !usedNicknames.has(name));
+  
+  let nickname: string;
+  
+  if (availableNames.length > 0) {
+    // 사용 가능한 닉네임 중 랜덤 선택
+    nickname = availableNames[Math.floor(Math.random() * availableNames.length)];
+  } else {
+    // 모든 닉네임이 사용 중이면 숫자 접미사 추가
+    const baseName = BOT_NICKNAMES[Math.floor(Math.random() * BOT_NICKNAMES.length)];
+    const suffix = Math.floor(Math.random() * 1000);
+    nickname = `${baseName}${suffix}`;
+  }
+  
+  usedNicknames.add(nickname);
+  
+  // 일정 시간 후 닉네임 해제 (재사용 가능하도록)
+  setTimeout(() => {
+    usedNicknames.delete(nickname);
+  }, 60000); // 1분 후 해제
+  
+  return nickname;
 }
