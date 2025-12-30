@@ -15,6 +15,9 @@ export type InAppBrowserType =
   | 'unknown'
   | null;
 
+/** 저성능 브라우저 타입 */
+export type SlowBrowserType = 'samsung' | 'ucbrowser' | 'opera-mini' | null;
+
 /** 기기 타입 */
 export type DeviceType = 'mobile' | 'tablet' | 'desktop';
 
@@ -30,6 +33,10 @@ export interface DeviceInfo {
   isInAppBrowser: boolean;
   /** 인앱 브라우저 타입 */
   inAppBrowserType: InAppBrowserType;
+  /** 저성능 브라우저 타입 */
+  slowBrowserType: SlowBrowserType;
+  /** 저성능 브라우저 여부 */
+  isSlowBrowser: boolean;
 }
 
 /**
@@ -143,12 +150,31 @@ export function detectDeviceType(userAgent?: string): DeviceType {
 }
 
 /**
+ * 저성능 브라우저 감지
+ * @param userAgent - User-Agent 문자열
+ * @returns 저성능 브라우저 타입
+ */
+export function detectSlowBrowser(userAgent?: string): SlowBrowserType {
+  const ua = userAgent ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '');
+
+  // 삼성 인터넷 브라우저
+  if (/SamsungBrowser/i.test(ua)) return 'samsung';
+  // UC 브라우저
+  if (/UCBrowser/i.test(ua)) return 'ucbrowser';
+  // Opera Mini
+  if (/Opera Mini/i.test(ua)) return 'opera-mini';
+
+  return null;
+}
+
+/**
  * 전체 기기 정보 감지
  * @param userAgent - User-Agent 문자열 (테스트용 주입 가능)
  * @returns 기기 정보 객체
  */
 export function detectDevice(userAgent?: string): DeviceInfo {
   const inAppBrowserType = detectInAppBrowser(userAgent);
+  const slowBrowserType = detectSlowBrowser(userAgent);
   const deviceType = detectDeviceType(userAgent);
 
   return {
@@ -157,6 +183,8 @@ export function detectDevice(userAgent?: string): DeviceInfo {
     hasTouch: detectTouchSupport(),
     isInAppBrowser: inAppBrowserType !== null,
     inAppBrowserType,
+    slowBrowserType,
+    isSlowBrowser: slowBrowserType !== null,
   };
 }
 

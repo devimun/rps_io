@@ -11,10 +11,12 @@ import { Ranking } from './components/ui/Ranking';
 import { DeathScreen } from './components/ui/DeathScreen';
 import { Tutorial } from './components/ui/Tutorial';
 import { InAppWarning } from './components/ui/InAppWarning';
+import { SlowBrowserWarning } from './components/ui/SlowBrowserWarning';
 import { Minimap } from './components/ui/Minimap';
 import { KillFeed } from './components/ui/KillFeed';
 import { FullscreenButton } from './components/ui/FullscreenButton';
 import { detectDevice } from './utils/deviceDetector';
+import type { SlowBrowserType } from './utils/deviceDetector';
 import { extractRoomCode } from './utils/shareUtils';
 
 /**
@@ -32,6 +34,8 @@ function App() {
 
   /** URL에서 추출한 방 코드 (다이렉트 입장용) */
   const [initialRoomCode, setInitialRoomCode] = useState<string | null>(null);
+  /** 저성능 브라우저 타입 */
+  const [slowBrowserType, setSlowBrowserType] = useState<SlowBrowserType>(null);
 
   // 초기화: 기기 감지 및 URL 파라미터 처리
   useEffect(() => {
@@ -41,6 +45,11 @@ function App() {
     if (deviceInfo.isInAppBrowser) {
       setIsInAppBrowser(true);
       setLowSpecMode(true);
+    }
+
+    // 저성능 브라우저 감지 (모바일에서만)
+    if (deviceInfo.isMobile && deviceInfo.isSlowBrowser) {
+      setSlowBrowserType(deviceInfo.slowBrowserType);
     }
 
     // URL에서 방 코드 추출 (다이렉트 입장)
@@ -55,6 +64,11 @@ function App() {
     <div className="min-h-screen bg-slate-900 text-white">
       {/* 인앱 브라우저 경고 */}
       {isInAppBrowser && <InAppWarning />}
+
+      {/* 저성능 브라우저 경고 */}
+      {!isInAppBrowser && slowBrowserType && (
+        <SlowBrowserWarning browserType={slowBrowserType} />
+      )}
 
       {/* 메인 콘텐츠 */}
       {phase === 'idle' && <Lobby initialRoomCode={initialRoomCode} />}

@@ -127,14 +127,14 @@ export class PlayerRenderer {
     isMe: boolean,
     lowSpecMode: boolean
   ): void {
-    // 위치 보간
-    const lerpFactor = lowSpecMode ? 0.4 : 0.25;
+    // 위치 보간 (저사양 모드: 더 빠른 보간)
+    const lerpFactor = lowSpecMode ? 0.5 : 0.25;
     container.x = Phaser.Math.Linear(container.x, player.x, lerpFactor);
     container.y = Phaser.Math.Linear(container.y, player.y, lerpFactor);
 
     // 크기 보간
     const currentSize = container.getData('currentSize') as number;
-    const sizeLerpFactor = lowSpecMode ? 0.2 : 0.1;
+    const sizeLerpFactor = lowSpecMode ? 0.3 : 0.1;
     const interpolatedSize = Phaser.Math.Linear(currentSize, player.size, sizeLerpFactor);
     container.setData('currentSize', interpolatedSize);
 
@@ -144,14 +144,22 @@ export class PlayerRenderer {
     // 무적 상태 깜빡임
     container.setAlpha(this.calculateInvincibilityAlpha(player));
 
-    // 변신 타이머 아크
-    this.drawTransformTimerArc(container, player, interpolatedSize, rpsColor);
+    // 변신 타이머 아크 (저사양 모드에서는 간소화)
+    if (!lowSpecMode) {
+      this.drawTransformTimerArc(container, player, interpolatedSize, rpsColor);
+    } else {
+      // 저사양 모드: 타이머 아크 숨김
+      const timerArc = container.getData('timerArc') as Phaser.GameObjects.Graphics;
+      timerArc?.clear();
+    }
 
     // 본체 그리기
     this.drawBody(container, interpolatedSize, playerColor, rpsColor, isMe);
 
-    // 눈 그리기
-    this.drawEyes(container, interpolatedSize);
+    // 눈 그리기 (저사양 모드에서는 간소화)
+    if (!lowSpecMode) {
+      this.drawEyes(container, interpolatedSize);
+    }
 
     // 텍스트 업데이트
     const emojiText = container.getData('emojiText') as Phaser.GameObjects.Text;

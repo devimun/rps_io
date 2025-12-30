@@ -10,6 +10,7 @@ import { socketService } from '../../services/socketService';
 import type { Player } from '@chaos-rps/shared';
 import { WORLD_SIZE } from '@chaos-rps/shared';
 import { VirtualJoystick } from '../VirtualJoystick';
+import { BoostButton } from '../BoostButton';
 import { PlayerRenderer } from '../PlayerRenderer';
 
 /** 게임 월드 크기 */
@@ -29,13 +30,8 @@ function isMobileDevice(): boolean {
  */
 function canDash(): boolean {
   const { isDashing, dashCooldownEndTime } = useGameStore.getState();
-  
-  // 이미 대시 중이면 불가
   if (isDashing) return false;
-  
-  // 쿨다운 중이면 불가
   if (Date.now() < dashCooldownEndTime) return false;
-  
   return true;
 }
 
@@ -57,9 +53,12 @@ export class MainScene extends Phaser.Scene {
   private readonly moveInterval = 50;
   private cameraInitialized = false;
   private virtualJoystick: VirtualJoystick | null = null;
+  private boostButton: BoostButton | null = null;
   private isMobile = false;
   private playerRenderer!: PlayerRenderer;
-  private spaceKey: Phaser.Input.Keyboard.Key | null = null;
+  
+  /** 스페이스바 눌림 상태 추적 (키 반복 방지) */
+  private spaceKeyPressed = false;
 
   constructor() {
     super({ key: SCENE_KEYS.MAIN });
@@ -77,8 +76,13 @@ export class MainScene extends Phaser.Scene {
     this.createGrid();
     this.setupInput();
 
+    // 모바일: 조이스틱 + 부스트 버튼 (항상 표시)
     if (this.isMobile) {
       this.virtualJoystick = new VirtualJoystick(this);
+      this.boostButton = new BoostButton(this, tryDash);
+      
+      // 모바일 성능 최적화: 저사양 모드 활성화
+      useUIStore.getState().setLowSpecMode(true);
     }
   }
 
@@ -87,13 +91,15 @@ export class MainScene extends Phaser.Scene {
    */
   private createGrid(): void {
     const graphics = this.add.graphics();
-    const gridSize = 100;
+    const gridSize = this.isMobile ? 200 : 100; // 모바일: 그리드 간격 증가
 
-    // 점 패턴 배경
-    graphics.fillStyle(0x2a3a5e, 1);
-    for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += gridSize) {
-      for (let y = 0; y <= WORLD_CONFIG.HEIGHT; y += gridSize) {
-        graphics.fillCircle(x, y, 4);
+    // 점 패턴 배경 (모바일에서는 간소화)
+    if (!this.isMobile) {
+      graphics.fillStyle(0x2a3a5e, 1);
+      for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += gridSize) {
+        for (let y = 0; y <= WORLD_CONFIG.HEIGHT; y += gridSize) {
+          graphics.fillCircle(x, y, 4);
+        }
       }
     }
 
@@ -109,43 +115,44 @@ export class MainScene extends Phaser.Scene {
     }
     graphics.strokePath();
 
-    // 작은 그리드 선
-    graphics.lineStyle(1, 0x1e2d4a, 0.5);
-    for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += gridSize) {
-      graphics.moveTo(x, 0);
-      graphics.lineTo(x, WORLD_CONFIG.HEIGHT);
+    // 작은 그리드 선 (모바일에서는 생략)
+    if (!this.isMobile) {
+      graphics.lineStyle(1, 0x1e2d4a, 0.5);
+      for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += gridSize) {
+        graphics.moveTo(x, 0);
+        graphics.lineTo(x, WORLD_CONFIG.HEIGHT);
+      }
+      for (let y = 0; y <= WORLD_CONFIG.HEIGHT; y += gridSize) {
+        graphics.moveTo(0, y);
+        graphics.lineTo(WORLD_CONFIG.WIDTH, y);
+      }
+      graphics.strokePath();
     }
-    for (let y = 0; y <= WORLD_CONFIG.HEIGHT; y += gridSize) {
-      graphics.moveTo(0, y);
-      graphics.lineTo(WORLD_CONFIG.WIDTH, y);
-    }
-    graphics.strokePath();
     
     // 월드 경계선
     const border = this.add.graphics();
     border.lineStyle(8, 0xff4444, 1);
     border.strokeRect(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
     
-    // 경계 경고 영역
-    const warningZone = this.add.graphics();
-    warningZone.fillStyle(0xff0000, 0.1);
-    const w = 50;
-    warningZone.fillRect(0, 0, WORLD_CONFIG.WIDTH, w);
-    warningZone.fillRect(0, WORLD_CONFIG.HEIGHT - w, WORLD_CONFIG.WIDTH, w);
-    warningZone.fillRect(0, 0, w, WORLD_CONFIG.HEIGHT);
-    warningZone.fillRect(WORLD_CONFIG.WIDTH - w, 0, w, WORLD_CONFIG.HEIGHT);
+    // 경계 경고 영역 (모바일에서는 생략)
+    if (!this.isMobile) {
+      const warningZone = this.add.graphics();
+      warningZone.fillStyle(0xff0000, 0.1);
+      const w = 50;
+      warningZone.fillRect(0, 0, WORLD_CONFIG.WIDTH, w);
+      warningZone.fillRect(0, WORLD_CONFIG.HEIGHT - w, WORLD_CONFIG.WIDTH, w);
+      warningZone.fillRect(0, 0, w, WORLD_CONFIG.HEIGHT);
+      warningZone.fillRect(WORLD_CONFIG.WIDTH - w, 0, w, WORLD_CONFIG.HEIGHT);
+    }
   }
 
   private setupInput(): void {
     this.input.on('pointermove', this.handlePointerMove, this);
     this.input.on('pointerdown', this.handlePointerDown, this);
     
-    // 스페이스바 키 등록 (키 반복 비활성화)
-    this.spaceKey = this.input.keyboard?.addKey(
-      Phaser.Input.Keyboard.KeyCodes.SPACE,
-      true,  // enableCapture
-      false  // emitOnRepeat = false (키 반복 비활성화)
-    ) ?? null;
+    // 스페이스바: keydown/keyup으로 직접 처리 (키 반복 방지)
+    this.input.keyboard?.on('keydown-SPACE', this.onSpaceDown, this);
+    this.input.keyboard?.on('keyup-SPACE', this.onSpaceUp, this);
     
     // 마우스 우클릭으로 즉시 대시
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -163,23 +170,26 @@ export class MainScene extends Phaser.Scene {
   }
 
   /**
-   * 대시 입력 처리 (스페이스바 한 번 누르면 대시 시작)
+   * 스페이스바 눌림 (키 반복 방지)
    */
-  private handleDashInput(): void {
-    if (!this.spaceKey) return;
+  private onSpaceDown(): void {
+    // 이미 눌린 상태면 무시 (키 반복 방지)
+    if (this.spaceKeyPressed) return;
     
-    // JustDown: 이번 프레임에 처음 눌렸는지 확인 (키 반복 무시)
-    if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
-      tryDash();
-    }
+    this.spaceKeyPressed = true;
+    tryDash();
+  }
+
+  /**
+   * 스페이스바 뗌
+   */
+  private onSpaceUp(): void {
+    this.spaceKeyPressed = false;
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
     if (this.isMobile) {
-      // 모바일: 화면 오른쪽 터치로 즉시 대시
-      if (pointer.x > this.cameras.main.width / 2) {
-        tryDash();
-      }
+      // 모바일: 조이스틱/부스트 버튼 영역 외 터치는 무시
       return;
     }
 
@@ -235,8 +245,10 @@ export class MainScene extends Phaser.Scene {
     const { lowSpecMode } = useUIStore.getState();
     const myPlayerId = myPlayer?.id ?? null;
 
-    // 대시 입력 처리
-    this.handleDashInput();
+    // 모바일 부스트 버튼 업데이트
+    if (this.boostButton) {
+      this.boostButton.update();
+    }
 
     this.updatePlayerSprites(players, myPlayerId, lowSpecMode);
     this.updateCamera(myPlayerId);
@@ -296,9 +308,18 @@ export class MainScene extends Phaser.Scene {
     this.input.off('pointermove', this.handlePointerMove, this);
     this.input.off('pointerdown', this.handlePointerMove, this);
     
+    // 키보드 이벤트 정리
+    this.input.keyboard?.off('keydown-SPACE', this.onSpaceDown, this);
+    this.input.keyboard?.off('keyup-SPACE', this.onSpaceUp, this);
+    
     if (this.virtualJoystick) {
       this.virtualJoystick.destroy();
       this.virtualJoystick = null;
+    }
+    
+    if (this.boostButton) {
+      this.boostButton.destroy();
+      this.boostButton = null;
     }
   }
 }
