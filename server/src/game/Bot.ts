@@ -164,9 +164,11 @@ export class BotEntity extends PlayerEntity {
     // 봇마다 다른 배회 패턴을 위해 랜덤 오프셋
     this.lastWanderChange = Date.now() - Math.random() * this.wanderChangeInterval;
     
-    // 초기 점수 부여 (0~50 랜덤) - 게임이 진행 중인 느낌을 주기 위함
-    const initialScore = Math.floor(Math.random() * 51);
-    this.addScore(initialScore);
+    // 초기 킬 수 부여 (0~5 랜덤) - 게임이 진행 중인 느낌을 주기 위함
+    const initialKills = Math.floor(Math.random() * 6);
+    for (let i = 0; i < initialKills; i++) {
+      this.addKill();
+    }
   }
 
   /**
@@ -215,41 +217,52 @@ export class BotEntity extends PlayerEntity {
 
 /**
  * 실제 플레이어처럼 보이는 봇 닉네임 풀
- * 다양한 스타일의 닉네임을 포함합니다.
+ * 실제 io 게임에서 사람들이 자주 사용하는 영어 닉네임입니다.
  */
 const BOT_NICKNAMES = [
-  // 영어 닉네임 (게이머 스타일)
-  'Shadow', 'Phoenix', 'Storm', 'Blaze', 'Frost', 'Thunder', 'Viper', 'Wolf',
-  'Dragon', 'Ninja', 'Hawk', 'Tiger', 'Lion', 'Bear', 'Eagle', 'Shark',
-  'Ace', 'King', 'Queen', 'Jack', 'Joker', 'Knight', 'Rogue', 'Mage',
-  'Hunter', 'Sniper', 'Tank', 'Healer', 'Warrior', 'Archer', 'Wizard', 'Paladin',
-  // 숫자 조합 스타일
-  'Pro123', 'Gamer99', 'Player1', 'NoobKing', 'MVP2024', 'Legend77', 'Master42',
-  'Elite88', 'Boss666', 'Hero007', 'Star555', 'Flash99', 'Speed100', 'Power50',
-  // 재미있는 닉네임
-  'Potato', 'Banana', 'Cookie', 'Noodle', 'Pickle', 'Waffle', 'Taco', 'Pizza',
-  'Sushi', 'Ramen', 'Burger', 'Donut', 'Mochi', 'Kimchi', 'Tofu', 'Curry',
-  // 감정/상태 표현
-  'Sleepy', 'Hungry', 'Happy', 'Angry', 'Chill', 'Hyper', 'Lazy', 'Crazy',
-  'Lucky', 'Unlucky', 'Brave', 'Sneaky', 'Speedy', 'Mighty', 'Tiny', 'Giant',
-  // 한국어 로마자 스타일
-  'Daebak', 'Hwaiting', 'Jjang', 'Oppa', 'Noona', 'Hyung', 'Unnie', 'Maknae',
-  'Aegyo', 'Bbang', 'Chikin', 'Ramyun', 'Soju', 'Makgeolli', 'Tteok', 'Gimbap',
-  // 동물 + 형용사
-  'FastCat', 'SlowDog', 'BigBird', 'SmolFish', 'CoolFox', 'HotBear', 'IcyWolf',
-  'FireAnt', 'WaterBug', 'WindOwl', 'EarthMole', 'SkyHawk', 'SeaShark', 'MoonBat',
-  // 색상 + 명사
-  'RedStar', 'BlueMoon', 'GreenLeaf', 'YellowSun', 'PinkRose', 'BlackNight',
-  'WhiteSnow', 'GoldCoin', 'SilverKey', 'PurpleGem', 'OrangeJuice', 'CyanWave',
-  // 직업/역할
-  'Chef', 'Doctor', 'Pilot', 'Artist', 'Coder', 'Gamer', 'Streamer', 'Singer',
-  'Dancer', 'Writer', 'Builder', 'Farmer', 'Fisher', 'Miner', 'Trader', 'Racer',
-  // 신화/판타지
-  'Zeus', 'Odin', 'Thor', 'Loki', 'Athena', 'Apollo', 'Hades', 'Poseidon',
-  'Merlin', 'Arthur', 'Gandalf', 'Frodo', 'Legolas', 'Gimli', 'Aragorn', 'Sauron',
-  // 우주/과학
-  'Cosmos', 'Galaxy', 'Nebula', 'Quasar', 'Pulsar', 'Nova', 'Comet', 'Meteor',
-  'Atom', 'Proton', 'Neutron', 'Photon', 'Quantum', 'Plasma', 'Fusion', 'Laser',
+  // 키보드 대충 친 스타일 (가장 흔함)
+  'asdf', 'qwer', 'zxcv', 'aaaa', 'ssss', 'dddd', 'ffff', 'jjjj',
+  'aaa', 'bbb', 'ccc', 'xxx', 'zzz', 'qqqq', 'wwww', 'eeee',
+  'asdfgh', 'qwerty', 'zxcvbn', 'poiuy', 'lkjhg', 'mnbvc',
+  // 숫자 조합 (매우 흔함)
+  '123', '1234', '12345', '111', '222', '333', '777', '999',
+  'abc123', 'test123', 'user123', 'player1', 'player2', 'gamer123',
+  'pro123', 'noob123', 'guest1', 'guest123', 'temp', 'test',
+  // 일반적인 이름
+  'john', 'mike', 'alex', 'chris', 'david', 'james', 'tom', 'sam',
+  'jake', 'ryan', 'nick', 'matt', 'dan', 'ben', 'joe', 'max',
+  'bob', 'jim', 'tim', 'steve', 'mark', 'paul', 'eric', 'adam',
+  // 게임 용어 (io 게임에서 흔함)
+  'noob', 'pro', 'god', 'king', 'boss', 'master', 'legend', 'goat',
+  'GG', 'EZ', 'MVP', 'ACE', 'LOL', 'RIP', 'AFK', 'OP',
+  'tryhard', 'casual', 'smurf', 'carry', 'feeder', 'camper',
+  // 인터넷 슬랭
+  'lol', 'lmao', 'rofl', 'omg', 'wtf', 'bruh', 'dude', 'bro',
+  'yolo', 'swag', 'epic', 'based', 'chad', 'sigma', 'alpha',
+  // 자기 표현
+  'me', 'myself', 'nobody', 'someone', 'anyone', 'idk', 'meh',
+  'hi', 'hello', 'hey', 'yo', 'sup', 'bye', 'ok', 'yes', 'no',
+  // 동물 (단순)
+  'cat', 'dog', 'fish', 'bird', 'duck', 'frog', 'bear', 'wolf',
+  'fox', 'rat', 'bat', 'cow', 'pig', 'ant', 'bee', 'owl',
+  // 음식 (단순)
+  'pizza', 'taco', 'burger', 'fries', 'bacon', 'egg', 'rice', 'soup',
+  'cake', 'pie', 'cookie', 'candy', 'chips', 'bread', 'milk', 'juice',
+  // 색상
+  'red', 'blue', 'green', 'black', 'white', 'pink', 'purple', 'orange',
+  // 자조적/유머 (io 게임에서 흔함)
+  'trash', 'garbage', 'potato', 'rock', 'nolife', 'loser', 'idiot',
+  'bot', 'npc', 'ai', 'fake', 'real', 'true', 'false',
+  // 랜덤 단어
+  'cool', 'nice', 'good', 'bad', 'big', 'small', 'fast', 'slow',
+  'hot', 'cold', 'old', 'new', 'dark', 'light', 'loud', 'quiet',
+  // 특수 패턴
+  'xXx', 'oOo', 'lIl', 'xox', 'owo', 'uwu', 'haha', 'kek',
+  'zzz', 'hmm', 'uhh', 'err', 'iiii', 'oooo', 'aaah', 'eeek',
+  // 프로게이머/스트리머 스타일
+  'faker', 'ninja', 'shroud', 'tfue', 'myth', 'sypher', 'clix',
+  // 게임 캐릭터
+  'mario', 'sonic', 'link', 'kirby', 'yoshi', 'peach', 'luigi',
 ];
 
 /** 사용된 닉네임 추적 (중복 방지) */

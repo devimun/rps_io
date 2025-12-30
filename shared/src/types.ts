@@ -208,6 +208,8 @@ export interface PlayerEliminatedEvent {
   eliminatedRpsState: RPSState;
   /** 사망 메시지 */
   deathMessage: string;
+  /** 제거된 플레이어의 킬 수 */
+  killCount: number;
 }
 
 /**
@@ -266,8 +268,8 @@ export interface RankingEntry {
   playerId: string;
   /** 플레이어 닉네임 */
   nickname: string;
-  /** 점수 */
-  score: number;
+  /** 킬 수 */
+  killCount: number;
 }
 
 /**

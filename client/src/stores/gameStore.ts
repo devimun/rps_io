@@ -41,6 +41,7 @@ interface GameState {
   eliminatorRpsState: RPSState | null;
   eliminatedRpsState: RPSState | null;
   deathMessage: string | null;
+  finalKillCount: number; // 사망 시 킬 수
 }
 
 /** 게임 스토어 액션 인터페이스 */
@@ -65,7 +66,7 @@ interface GameActions {
   setDashState: (isDashing: boolean, cooldownEndTime: number) => void;
 
   // 사망 관련
-  setDeathInfo: (eliminatorNickname: string, deathMessage: string, eliminatorRpsState?: RPSState, eliminatedRpsState?: RPSState) => void;
+  setDeathInfo: (eliminatorNickname: string, deathMessage: string, eliminatorRpsState?: RPSState, eliminatedRpsState?: RPSState, killCount?: number) => void;
   clearDeathInfo: () => void;
 
   // 리셋
@@ -93,6 +94,7 @@ const initialState: GameState = {
   eliminatorRpsState: null,
   eliminatedRpsState: null,
   deathMessage: null,
+  finalKillCount: 0,
 };
 
 /**
@@ -154,11 +156,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   setDashState: (isDashing, cooldownEndTime) =>
     set({ isDashing, dashCooldownEndTime: cooldownEndTime }),
 
-  setDeathInfo: (eliminatorNickname, deathMessage, eliminatorRpsState, eliminatedRpsState) =>
-    set({ eliminatorNickname, deathMessage, eliminatorRpsState: eliminatorRpsState ?? null, eliminatedRpsState: eliminatedRpsState ?? null, phase: 'dead' }),
+  setDeathInfo: (eliminatorNickname, deathMessage, eliminatorRpsState, eliminatedRpsState, killCount) =>
+    set({ eliminatorNickname, deathMessage, eliminatorRpsState: eliminatorRpsState ?? null, eliminatedRpsState: eliminatedRpsState ?? null, finalKillCount: killCount ?? 0, phase: 'dead' }),
 
   clearDeathInfo: () =>
-    set({ eliminatorNickname: null, deathMessage: null, eliminatorRpsState: null, eliminatedRpsState: null }),
+    set({ eliminatorNickname: null, deathMessage: null, eliminatorRpsState: null, eliminatedRpsState: null, finalKillCount: 0 }),
 
   reset: () => set(initialState),
 }));

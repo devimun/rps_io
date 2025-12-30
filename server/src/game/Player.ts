@@ -16,22 +16,22 @@ function getRandomRPSState(): RPSState {
 }
 
 /**
- * 점수에 따른 크기를 계산합니다.
- * 크기는 점수에 비례하여 증가하며, 단조 증가 함수입니다.
+ * 킬 수에 따른 크기를 계산합니다.
+ * 크기는 킬 수에 비례하여 증가하며, 단조 증가 함수입니다.
  * 최대 크기는 MAX_PLAYER_SIZE로 제한됩니다.
  *
- * @param score - 현재 점수
+ * @param killCount - 현재 킬 수
  * @returns 계산된 크기 (DEFAULT_PLAYER_SIZE ~ MAX_PLAYER_SIZE)
  */
-export function calculateSizeFromScore(score: number): number {
-  // 공식: baseSize + log2(score + 1) * growthFactor
-  // growthFactor를 2로 줄여서 성장 속도 감소
-  // 점수 0 → 크기 30 (기본)
-  // 점수 15 → 크기 38
-  // 점수 63 → 크기 42
-  // 점수 255 → 크기 46
-  const growthFactor = 2;
-  const calculatedSize = DEFAULT_PLAYER_SIZE + Math.log2(score + 1) * growthFactor;
+export function calculateSizeFromKills(killCount: number): number {
+  // 공식: baseSize + sqrt(killCount) * growthFactor
+  // 킬 0 → 크기 30 (기본)
+  // 킬 1 → 크기 34
+  // 킬 4 → 크기 38
+  // 킬 9 → 크기 42
+  // 킬 16 → 크기 46
+  const growthFactor = 4;
+  const calculatedSize = DEFAULT_PLAYER_SIZE + Math.sqrt(killCount) * growthFactor;
   
   // 최대 크기 제한 적용
   return Math.min(calculatedSize, MAX_PLAYER_SIZE);
@@ -54,7 +54,6 @@ export class PlayerEntity implements IPlayer {
   x: number;
   y: number;
   rpsState: RPSState;
-  score: number;
   size: number;
   isBot: boolean;
   velocityX: number;
@@ -63,6 +62,11 @@ export class PlayerEntity implements IPlayer {
   spawnTime: number;
   /** 마지막 변신 시간 (변신 타이머 표시용) */
   lastTransformTime?: number;
+  /** 킬 수 */
+  killCount: number;
+
+  // score는 레거시 호환성을 위해 유지 (항상 0)
+  get score(): number { return 0; }
 
   constructor(data: CreatePlayerData, spawnX: number, spawnY: number) {
     this.id = generateId();
@@ -70,12 +74,20 @@ export class PlayerEntity implements IPlayer {
     this.x = spawnX;
     this.y = spawnY;
     this.rpsState = getRandomRPSState();
-    this.score = 0;
     this.size = DEFAULT_PLAYER_SIZE;
     this.isBot = data.isBot ?? false;
     this.velocityX = 0;
     this.velocityY = 0;
     this.spawnTime = Date.now();
+    this.killCount = 0;
+  }
+
+  /**
+   * 킬 수를 증가시키고 크기를 업데이트합니다.
+   */
+  addKill(): void {
+    this.killCount++;
+    this.size = calculateSizeFromKills(this.killCount);
   }
 
   /**
@@ -84,15 +96,6 @@ export class PlayerEntity implements IPlayer {
    */
   isInvincible(): boolean {
     return Date.now() - this.spawnTime < SPAWN_INVINCIBILITY_MS;
-  }
-
-  /**
-   * 점수를 추가하고 크기를 업데이트합니다.
-   * @param points - 추가할 점수
-   */
-  addScore(points: number): void {
-    this.score += points;
-    this.size = calculateSizeFromScore(this.score);
   }
 
   /**
@@ -131,19 +134,19 @@ export class PlayerEntity implements IPlayer {
   reset(spawnX: number, spawnY: number): void {
     this.x = spawnX;
     this.y = spawnY;
-    this.score = 0;
     this.size = DEFAULT_PLAYER_SIZE;
     this.rpsState = getRandomRPSState();
     this.velocityX = 0;
     this.velocityY = 0;
-    this.spawnTime = Date.now(); // 리스폰 시 무적 시간 갱신
+    this.spawnTime = Date.now();
+    this.killCount = 0;
   }
 
   /**
    * 플레이어 데이터를 직렬화합니다.
    * @returns 직렬화된 플레이어 데이터
    */
-  toJSON(): IPlayer {
+  toJSON(): IPlayer & { killCount: number } {
     return {
       id: this.id,
       nickname: this.nickname,
@@ -157,6 +160,7 @@ export class PlayerEntity implements IPlayer {
       velocityY: this.velocityY,
       spawnTime: this.spawnTime,
       lastTransformTime: this.lastTransformTime,
+      killCount: this.killCount,
     };
   }
 

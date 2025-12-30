@@ -6,14 +6,19 @@
 
 import { Player as IPlayer } from '@chaos-rps/shared';
 
+/** 킬 수를 포함한 플레이어 인터페이스 (서버 내부용) */
+interface PlayerWithKills extends IPlayer {
+  killCount?: number;
+}
+
 /** 랭킹 엔트리 */
 export interface RankingEntry {
   /** 플레이어 ID */
   playerId: string;
   /** 닉네임 */
   nickname: string;
-  /** 점수 */
-  score: number;
+  /** 킬 수 */
+  killCount: number;
   /** 순위 (1부터 시작) */
   rank: number;
 }
@@ -34,17 +39,17 @@ const DEFAULT_CONFIG: RankingConfig = {
  *
  * @param players - 플레이어 목록
  * @param maxRanks - 최대 순위 수
- * @returns 점수 기준 내림차순 정렬된 랭킹 목록
+ * @returns 킬 수 기준 내림차순 정렬된 랭킹 목록
  */
-export function calculateRanking(players: IPlayer[], maxRanks: number = 10): RankingEntry[] {
-  // 점수 기준 내림차순 정렬
-  const sorted = [...players].sort((a, b) => b.score - a.score);
+export function calculateRanking(players: PlayerWithKills[], maxRanks: number = 10): RankingEntry[] {
+  // 킬 수 기준 내림차순 정렬
+  const sorted = [...players].sort((a, b) => (b.killCount ?? 0) - (a.killCount ?? 0));
 
   // 상위 N명만 추출하고 랭킹 엔트리로 변환
   return sorted.slice(0, maxRanks).map((player, index) => ({
     playerId: player.id,
     nickname: player.nickname,
-    score: player.score,
+    killCount: player.killCount ?? 0,
     rank: index + 1,
   }));
 }
@@ -56,8 +61,8 @@ export function calculateRanking(players: IPlayer[], maxRanks: number = 10): Ran
  * @param playerId - 찾을 플레이어 ID
  * @returns 순위 (1부터 시작) 또는 null (찾지 못한 경우)
  */
-export function findPlayerRank(players: IPlayer[], playerId: string): number | null {
-  const sorted = [...players].sort((a, b) => b.score - a.score);
+export function findPlayerRank(players: PlayerWithKills[], playerId: string): number | null {
+  const sorted = [...players].sort((a, b) => (b.killCount ?? 0) - (a.killCount ?? 0));
   const index = sorted.findIndex((p) => p.id === playerId);
   return index >= 0 ? index + 1 : null;
 }
@@ -81,7 +86,7 @@ export class RankingSystem {
    * @param players - 현재 플레이어 목록
    * @returns 업데이트된 랭킹 목록
    */
-  update(players: IPlayer[]): RankingEntry[] {
+  update(players: PlayerWithKills[]): RankingEntry[] {
     this.cachedRanking = calculateRanking(players, this.config.maxRanks);
     this.lastUpdateTime = Date.now();
     return this.cachedRanking;

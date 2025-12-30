@@ -72,6 +72,8 @@ export const GameCanvas = memo(function GameCanvas() {
       {
         onConnect: () => {
           setConnectionStatus('connected');
+          // 대시 상태 초기화 (이전 게임 상태 제거)
+          setDashState(false, 0);
           socketService.sendReady();
           // 게임 시작 이벤트 트래킹
           trackGameStart(isPrivateRoom ? 'private' : 'public');
@@ -91,7 +93,7 @@ export const GameCanvas = memo(function GameCanvas() {
           updateRankings(rankings);
         },
         onEliminated: (data) => {
-          setDeathInfo(data.eliminatorNickname, data.deathMessage, data.eliminatorRpsState, data.eliminatedRpsState);
+          setDeathInfo(data.eliminatorNickname, data.deathMessage, data.eliminatorRpsState, data.eliminatedRpsState, data.killCount);
         },
         onRoomClosed: (reason) => {
           console.log('[Socket] Room closed:', reason);

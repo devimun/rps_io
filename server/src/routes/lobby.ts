@@ -19,6 +19,8 @@ interface CreateRoomBody {
 interface JoinRoomBody {
   nickname: string;
   code?: string;
+  /** 제외할 방 ID (다시하기 시 직전 방 제외) */
+  excludeRoomId?: string;
 }
 
 /** 방 조회 파라미터 */
@@ -96,7 +98,7 @@ export function registerLobbyRoutes<T extends IGameRoom>(
   fastify.post<{ Body: JoinRoomBody }>(
     '/rooms/join',
     async (request: FastifyRequest<{ Body: JoinRoomBody }>, reply: FastifyReply) => {
-      const { nickname, code } = request.body;
+      const { nickname, code, excludeRoomId } = request.body;
 
       // 닉네임 검증
       const validation = validateNickname(nickname);
@@ -121,8 +123,8 @@ export function registerLobbyRoutes<T extends IGameRoom>(
         }
         room = foundRoom;
       } else {
-        // 바로 시작 - 공개 방 매칭
-        room = matchManager.findOrCreatePublicRoom();
+        // 바로 시작 - 공개 방 매칭 (직전 방 제외)
+        room = matchManager.findOrCreatePublicRoom(excludeRoomId);
       }
 
       // 플레이어 ID 생성 (임시)

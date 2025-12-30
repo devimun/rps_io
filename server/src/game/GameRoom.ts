@@ -60,7 +60,7 @@ export class GameRoomEntity implements IGameRoom {
   private lastRankingUpdate: number = 0;
   private readonly RANKING_UPDATE_INTERVAL = 1000; // 1초마다 랭킹 업데이트
   private onStateChange?: (state: GameStateUpdate) => void;
-  private onPlayerEliminated?: (winnerId: string, loserId: string, winnerRpsState: RPSState, loserRpsState: RPSState) => void;
+  private onPlayerEliminated?: (winnerId: string, loserId: string, winnerRpsState: RPSState, loserRpsState: RPSState, loserKillCount: number) => void;
   private onDashEvent?: (event: DashEvent) => void;
   private onKillFeed?: (data: KillFeedData) => void;
   private onRankingUpdate?: (rankings: RankingEntry[]) => void;
@@ -80,7 +80,7 @@ export class GameRoomEntity implements IGameRoom {
   }
 
   setOnStateChange(callback: (state: GameStateUpdate) => void): void { this.onStateChange = callback; }
-  setOnPlayerEliminated(callback: (winnerId: string, loserId: string, winnerRpsState: RPSState, loserRpsState: RPSState) => void): void { this.onPlayerEliminated = callback; }
+  setOnPlayerEliminated(callback: (winnerId: string, loserId: string, winnerRpsState: RPSState, loserRpsState: RPSState, loserKillCount: number) => void): void { this.onPlayerEliminated = callback; }
   setOnDashEvent(callback: (event: DashEvent) => void): void { this.onDashEvent = callback; }
   setOnKillFeed(callback: (data: KillFeedData) => void): void { this.onKillFeed = callback; }
   setOnRankingUpdate(callback: (rankings: RankingEntry[]) => void): void { this.onRankingUpdate = callback; }
@@ -106,17 +106,17 @@ export class GameRoomEntity implements IGameRoom {
     return player;
   }
 
-  /** 퇴장시킬 봇을 찾습니다 (점수가 가장 낮은 봇) */
+  /** 퇴장시킬 봇을 찾습니다 (킬 수가 가장 낮은 봇) */
   private findBotToRemove(): PlayerEntity | null {
-    let lowestScoreBot: PlayerEntity | null = null;
+    let lowestKillBot: PlayerEntity | null = null;
     for (const player of this.players.values()) {
       if (player.isBot) {
-        if (!lowestScoreBot || player.score < lowestScoreBot.score) {
-          lowestScoreBot = player;
+        if (!lowestKillBot || player.killCount < lowestKillBot.killCount) {
+          lowestKillBot = player;
         }
       }
     }
-    return lowestScoreBot;
+    return lowestKillBot;
   }
 
   removePlayer(playerId: string): boolean {
@@ -280,15 +280,15 @@ export class GameRoomEntity implements IGameRoom {
   private handleCollisionResult(p1: PlayerEntity, p2: PlayerEntity, result: CollisionResult, toRemove: string[]): void {
     switch (result) {
       case CollisionResult.WIN:
-        p1.addScore(p2.score + 10);
+        p1.addKill(); // 킬 수 증가 (크기도 자동 증가)
         toRemove.push(p2.id);
-        this.onPlayerEliminated?.(p1.id, p2.id, p1.rpsState, p2.rpsState);
+        this.onPlayerEliminated?.(p1.id, p2.id, p1.rpsState, p2.rpsState, p2.killCount);
         this.emitKillFeed(p1, p2);
         break;
       case CollisionResult.LOSE:
-        p2.addScore(p1.score + 10);
+        p2.addKill(); // 킬 수 증가 (크기도 자동 증가)
         toRemove.push(p1.id);
-        this.onPlayerEliminated?.(p2.id, p1.id, p2.rpsState, p1.rpsState);
+        this.onPlayerEliminated?.(p2.id, p1.id, p2.rpsState, p1.rpsState, p1.killCount);
         this.emitKillFeed(p2, p1);
         break;
       case CollisionResult.DRAW:

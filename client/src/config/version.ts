@@ -4,7 +4,7 @@
  */
 
 /** 현재 앱 버전 */
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';
 
 /** 빌드 날짜 */
 export const BUILD_DATE = '2024-12-31';
@@ -19,6 +19,18 @@ export interface UpdateLog {
 
 /** 업데이트 히스토리 (최신순) */
 export const UPDATE_LOGS: UpdateLog[] = [
+  {
+    version: '1.2.0',
+    date: '2024-12-31',
+    title: { ko: '킬 시스템 업데이트 🗡️', en: 'Kill System Update 🗡️' },
+    changes: [
+      { ko: '점수 시스템을 킬 수 기반으로 변경', en: 'Changed scoring system to kill-based' },
+      { ko: '랭킹이 킬 수 기준으로 표시', en: 'Rankings now show kill count' },
+      { ko: '사망 화면에 킬 수 표시 추가', en: 'Kill count display on death screen' },
+      { ko: '부스트 버튼 초기화 버그 수정', en: 'Fixed boost button initialization bug' },
+      { ko: '다시하기 시 직전 방 제외 매칭', en: 'Exclude previous room when playing again' },
+    ],
+  },
   {
     version: '1.1.0',
     date: '2024-12-31',

@@ -36,7 +36,7 @@ const getRpsName = (state: RPSState | null, language: string): string => {
 export function DeathScreen() {
   const { 
     eliminatorNickname, eliminatorRpsState, eliminatedRpsState, 
-    deathMessage, roomCode, nickname, isPrivateRoom,
+    deathMessage, roomCode, nickname, isPrivateRoom, finalKillCount,
     clearDeathInfo, setRoomInfo, setPhase, reset 
   } = useGameStore();
   const { language, setError, setLoading } = useUIStore();
@@ -56,13 +56,13 @@ export function DeathScreen() {
       const playTimeSeconds = Math.floor((Date.now() - gameStartTimeRef.current) / 1000);
       trackGameEnd({
         playTimeSeconds,
-        finalScore: 0, // 현재 점수 시스템 없음
-        killCount: 0,  // 킬 카운트 추적 필요 시 추가
+        finalScore: 0,
+        killCount: finalKillCount,
         roomType: isPrivateRoom ? 'private' : 'public',
       });
     }, DEATH_SCREEN_DELAY);
     return () => clearTimeout(timer);
-  }, [isPrivateRoom]);
+  }, [isPrivateRoom, finalKillCount]);
 
   const handleShare = async () => {
     const metadata = createShareMetadata(roomCode ?? undefined);
@@ -83,13 +83,20 @@ export function DeathScreen() {
     if (isJoining || !nickname) return;
     setIsJoining(true);
     setLoading(true, t('common.loading', language));
+    
+    // 현재 방 ID 저장 (직전 방 제외용)
+    const currentRoomId = useGameStore.getState().roomId;
+    
     clearDeathInfo();
     trackPlayAgain();
     try {
       const response = await fetch(`${API_BASE_URL}/rooms/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nickname }),
+        body: JSON.stringify({ 
+          nickname,
+          excludeRoomId: currentRoomId, // 직전 방 제외
+        }),
       });
       if (!response.ok) throw new Error('Failed to join');
       const data = await response.json();
@@ -114,6 +121,12 @@ export function DeathScreen() {
       <article className={`bg-slate-800 rounded-2xl p-8 max-w-sm w-full text-center 
         transform transition-all duration-500 ${fadeIn ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}`}>
         <h1 className="text-3xl font-bold text-red-400 mb-4">{t('death.title', language)}</h1>
+        
+        {/* 킬 수 표시 */}
+        <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-xl p-4 mb-4 border border-amber-500/30">
+          <p className="text-amber-400 text-sm mb-1">{language === 'ko' ? '이번 게임 킬 수' : 'Kills This Game'}</p>
+          <p className="text-4xl font-bold text-white">{finalKillCount}</p>
+        </div>
         
         <div className="bg-slate-900/50 rounded-xl p-4 mb-4">
           <div className="flex items-center justify-center gap-4">

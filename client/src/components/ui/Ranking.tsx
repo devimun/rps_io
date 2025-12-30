@@ -17,13 +17,13 @@ import { t } from '../../utils/i18n';
 const RankingItem = memo(function RankingItem({ 
   rank, 
   nickname, 
-  score, 
+  killCount, 
   isMe,
   language 
 }: { 
   rank: number; 
   nickname: string; 
-  score: number; 
+  killCount: number; 
   isMe: boolean;
   language: string;
 }) {
@@ -40,7 +40,7 @@ const RankingItem = memo(function RankingItem({
           {isMe && ` (${t('game.you', language)})`}
         </span>
       </span>
-      <span className="text-white/60">{score}</span>
+      <span className="text-amber-400">🗡️ {killCount}</span>
     </li>
   );
 });
@@ -70,7 +70,7 @@ export const Ranking = memo(function Ranking() {
             key={entry.playerId}
             rank={entry.rank}
             nickname={entry.nickname}
-            score={entry.score}
+            killCount={entry.killCount}
             isMe={entry.playerId === playerId}
             language={language}
           />

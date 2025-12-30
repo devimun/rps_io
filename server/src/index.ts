@@ -162,7 +162,7 @@ async function start(): Promise<void> {
             io.to(roomId).emit('game:state', state);
           });
 
-          room.setOnPlayerEliminated((winnerId, loserId, winnerRpsState, loserRpsState) => {
+          room.setOnPlayerEliminated((winnerId, loserId, winnerRpsState, loserRpsState, loserKillCount) => {
             const loserSocket = playerSocketMap.get(loserId);
             if (loserSocket) {
               io.to(loserSocket).emit('player:eliminated', {
@@ -172,6 +172,7 @@ async function start(): Promise<void> {
                 eliminatorRpsState: winnerRpsState,
                 eliminatedRpsState: loserRpsState,
                 deathMessage: '당신은 제거되었습니다!',
+                killCount: loserKillCount,
               });
             }
           });
