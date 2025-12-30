@@ -38,11 +38,6 @@ export function Tutorial() {
             description="가위는 보를, 보는 바위를, 바위는 가위를 이깁니다"
           />
           <TutorialRule
-            icon="🎯"
-            text={t('tutorial.rule2', language)}
-            description="상대를 잡으면 킬을 얻습니다"
-          />
-          <TutorialRule
             icon="📈"
             text={t('tutorial.rule3', language)}
             description="킬이 많을수록 캐릭터가 커집니다"
