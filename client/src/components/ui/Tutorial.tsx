@@ -40,17 +40,17 @@ export function Tutorial() {
           <TutorialRule
             icon="🎯"
             text={t('tutorial.rule2', language)}
-            description="상대를 잡으면 점수를 얻습니다"
+            description="상대를 잡으면 킬을 얻습니다"
           />
           <TutorialRule
             icon="📈"
             text={t('tutorial.rule3', language)}
-            description="점수가 높을수록 캐릭터가 커집니다"
+            description="킬이 많을수록 캐릭터가 커집니다"
           />
           <TutorialRule
             icon="🔄"
             text={t('tutorial.rule4', language)}
-            description="주기적으로 상태가 바뀝니다"
+            description="모든 플레이어가 동시에 변신합니다"
           />
         </ul>
 

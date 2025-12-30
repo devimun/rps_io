@@ -48,7 +48,6 @@ export function initAnalytics(): void {
   window.gtag('config', GA_MEASUREMENT_ID);
 
   isInitialized = true;
-  console.log('[Analytics] GA4 초기화 완료');
 }
 
 /**

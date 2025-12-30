@@ -50,9 +50,9 @@ const translations: Record<SupportedLanguage, TranslationData> = {
     // 튜토리얼
     'tutorial.title': '게임 방법',
     'tutorial.rule1': '가위 > 보 > 바위 > 가위',
-    'tutorial.rule2': '상대를 잡으면 점수 획득',
-    'tutorial.rule3': '점수가 높을수록 크기 증가',
-    'tutorial.rule4': '1.5초마다 랜덤 변신',
+    'tutorial.rule2': '상대를 잡으면 킬 획득',
+    'tutorial.rule3': '킬이 많을수록 크기 증가',
+    'tutorial.rule4': '주기적으로 전체 변신',
     'tutorial.dontShowAgain': '다시 보지 않기',
     'tutorial.start': '시작하기',
 
@@ -106,9 +106,8 @@ const translations: Record<SupportedLanguage, TranslationData> = {
     // 튜토리얼
     'tutorial.title': 'How to Play',
     'tutorial.rule1': 'Scissors > Paper > Rock > Scissors',
-    'tutorial.rule2': 'Catch opponents to score',
-    'tutorial.rule3': 'Higher score = bigger size',
-    'tutorial.rule4': 'Random transform every 1.5s',
+    'tutorial.rule3': 'More kills = bigger size',
+    'tutorial.rule4': 'All players transform together',
     'tutorial.dontShowAgain': "Don't show again",
     'tutorial.start': 'Start',
 
