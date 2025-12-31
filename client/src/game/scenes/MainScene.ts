@@ -86,9 +86,6 @@ export class MainScene extends Phaser.Scene {
     if (this.isMobile) {
       this.virtualJoystick = new VirtualJoystick(this);
       this.boostButton = new BoostButton(this, tryDash);
-      
-      // 모바일 성능 최적화: 저사양 모드 활성화
-      useUIStore.getState().setLowSpecMode(true);
     }
   }
 
@@ -221,21 +218,52 @@ export class MainScene extends Phaser.Scene {
 
   update(): void {
     const { players, myPlayer } = useGameStore.getState();
-    const { lowSpecMode } = useUIStore.getState();
+    const { isMobile } = useUIStore.getState();
     const myPlayerId = myPlayer?.id ?? null;
 
     if (this.boostButton) {
       this.boostButton.update();
     }
 
-    this.updatePlayerSprites(players, myPlayerId, lowSpecMode);
+    // 모바일 성능 최적화: 화면 밖 플레이어 업데이트 스킵
+    const visiblePlayers = isMobile 
+      ? this.getVisiblePlayers(players, myPlayer)
+      : players;
+
+    this.updatePlayerSprites(visiblePlayers, myPlayerId, isMobile);
     this.updateCamera(myPlayerId);
+  }
+
+  /**
+   * 화면에 보이는 플레이어만 필터링 (모바일 최적화)
+   */
+  private getVisiblePlayers(
+    players: Map<string, Player>,
+    myPlayer: Player | null
+  ): Map<string, Player> {
+    if (!myPlayer) return players;
+
+    const viewDistance = 600; // 화면 반경
+    const visiblePlayers = new Map<string, Player>();
+
+    players.forEach((player, id) => {
+      const dx = player.x - myPlayer.x;
+      const dy = player.y - myPlayer.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // 내 플레이어 또는 화면 내 플레이어만 포함
+      if (id === myPlayer.id || distance < viewDistance) {
+        visiblePlayers.set(id, player);
+      }
+    });
+
+    return visiblePlayers;
   }
 
   private updatePlayerSprites(
     players: Map<string, Player>,
     myPlayerId: string | null,
-    lowSpecMode: boolean
+    isMobile: boolean
   ): void {
     // 사라진 플레이어 제거
     this.playerSprites.forEach((container, id) => {
@@ -262,7 +290,7 @@ export class MainScene extends Phaser.Scene {
         this.playerSprites.set(id, container);
       }
 
-      this.playerRenderer.updateSprite(container, player, id === myPlayerId, lowSpecMode);
+      this.playerRenderer.updateSprite(container, player, id === myPlayerId, isMobile);
     });
   }
 

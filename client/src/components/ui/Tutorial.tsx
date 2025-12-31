@@ -10,7 +10,7 @@ import { t } from '../../utils/i18n';
  * 튜토리얼 컴포넌트
  */
 export function Tutorial() {
-  const { language, dismissTutorial, setShowTutorial } = useUIStore();
+  const { language, isMobile, dismissTutorial, setShowTutorial } = useUIStore();
   const [dontShowAgain, setDontShowAgain] = useState(false);
 
   /** 시작하기 */
@@ -31,7 +31,7 @@ export function Tutorial() {
         </h1>
 
         {/* 규칙 목록 */}
-        <ul className="space-y-4 mb-8">
+        <ul className="space-y-4 mb-6">
           <TutorialRule
             icon="✂️"
             text={t('tutorial.rule1', language)}
@@ -48,6 +48,18 @@ export function Tutorial() {
             description="모든 플레이어가 동시에 변신합니다"
           />
         </ul>
+
+        {/* 모바일 전용: PC 권장 메시지 */}
+        {isMobile && (
+          <div className="bg-slate-700/50 rounded-lg p-3 mb-6 border border-cyan-500/30">
+            <p className="text-cyan-400 text-sm font-medium flex items-center gap-2">
+              <span>💻</span>
+              {language === 'ko' 
+                ? 'PC에서 플레이하면 미니맵, 킬로그 등 더 많은 기능을 즐길 수 있습니다!'
+                : 'Play on PC for minimap, kill feed, and better performance!'}
+            </p>
+          </div>
+        )}
 
         {/* 다시 보지 않기 */}
         <label className="flex items-center gap-3 text-slate-400 mb-6 cursor-pointer">

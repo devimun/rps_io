@@ -43,9 +43,9 @@ export const GAME_CONFIG: Phaser.Types.Core.GameConfig = {
   scene: [PreloadScene, MainScene],
 };
 
-/** 저사양 모드 설정 */
-export const LOW_SPEC_CONFIG: Partial<Phaser.Types.Core.GameConfig> = {
-  type: Phaser.CANVAS, // Canvas 강제
+/** 모바일 최적화 설정 */
+export const MOBILE_CONFIG: Partial<Phaser.Types.Core.GameConfig> = {
+  type: Phaser.CANVAS, // Canvas 강제 (모바일 호환성)
   render: {
     antialias: false,
     pixelArt: true,
@@ -58,11 +58,11 @@ export const LOW_SPEC_CONFIG: Partial<Phaser.Types.Core.GameConfig> = {
 };
 
 /**
- * 저사양 모드 적용된 설정 반환
+ * 모바일 최적화 적용된 설정 반환
  */
-export function getGameConfig(lowSpecMode: boolean = false): Phaser.Types.Core.GameConfig {
-  if (lowSpecMode) {
-    return { ...GAME_CONFIG, ...LOW_SPEC_CONFIG };
+export function getGameConfig(isMobile: boolean = false): Phaser.Types.Core.GameConfig {
+  if (isMobile) {
+    return { ...GAME_CONFIG, ...MOBILE_CONFIG };
   }
   return GAME_CONFIG;
 }

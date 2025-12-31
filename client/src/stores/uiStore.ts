@@ -27,8 +27,8 @@ interface UIState {
   showTutorial: boolean;
   tutorialDismissed: boolean;
 
-  // 저사양 모드
-  lowSpecMode: boolean;
+  // 모바일 모드 (자동 감지, 성능 최적화에 사용)
+  isMobile: boolean;
 
   // 인앱 브라우저 감지
   isInAppBrowser: boolean;
@@ -57,8 +57,8 @@ interface UIActions {
   setShowTutorial: (show: boolean) => void;
   dismissTutorial: () => void;
 
-  // 저사양 모드 관련
-  setLowSpecMode: (enabled: boolean) => void;
+  // 모바일 모드 관련
+  setIsMobile: (isMobile: boolean) => void;
 
   // 인앱 브라우저 관련
   setIsInAppBrowser: (isInApp: boolean) => void;
@@ -88,6 +88,7 @@ const initialNonPersistedState = {
   loadingMessage: '',
   errorMessage: null,
   isInAppBrowser: false,
+  isMobile: false,
 };
 
 /**
@@ -102,7 +103,6 @@ export const useUIStore = create<UIState & UIActions>()(
       language: detectBrowserLanguage(),
       showTutorial: true,
       tutorialDismissed: false,
-      lowSpecMode: false,
       savedNickname: '',
 
       // 모달 액션
@@ -116,8 +116,8 @@ export const useUIStore = create<UIState & UIActions>()(
       setShowTutorial: (show) => set({ showTutorial: show }),
       dismissTutorial: () => set({ tutorialDismissed: true, showTutorial: false }),
 
-      // 저사양 모드 액션
-      setLowSpecMode: (enabled) => set({ lowSpecMode: enabled }),
+      // 모바일 모드 액션
+      setIsMobile: (isMobile) => set({ isMobile }),
 
       // 인앱 브라우저 액션
       setIsInAppBrowser: (isInApp) => set({ isInAppBrowser: isInApp }),
@@ -139,7 +139,6 @@ export const useUIStore = create<UIState & UIActions>()(
       partialize: (state) => ({
         language: state.language,
         tutorialDismissed: state.tutorialDismissed,
-        lowSpecMode: state.lowSpecMode,
         savedNickname: state.savedNickname,
       }),
     }

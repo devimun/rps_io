@@ -10,7 +10,7 @@ import { detectInAppBrowser, getExternalBrowserUrl } from '../../utils/deviceDet
  * 인앱 브라우저 경고 컴포넌트
  */
 export function InAppWarning() {
-  const { language, setIsInAppBrowser, setLowSpecMode } = useUIStore();
+  const { language, setIsInAppBrowser } = useUIStore();
 
   const inAppType = detectInAppBrowser();
 
@@ -21,10 +21,9 @@ export function InAppWarning() {
     window.location.href = externalUrl;
   };
 
-  /** 계속하기 (저사양 모드 활성화) */
+  /** 계속하기 */
   const handleContinue = () => {
     setIsInAppBrowser(false); // 경고 닫기
-    setLowSpecMode(true); // 저사양 모드 활성화
   };
 
   return (

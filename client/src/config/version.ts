@@ -4,7 +4,7 @@
  */
 
 /** 현재 앱 버전 */
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.2.1';
 
 /** 빌드 날짜 */
 export const BUILD_DATE = '2024-12-31';
@@ -19,6 +19,18 @@ export interface UpdateLog {
 
 /** 업데이트 히스토리 (최신순) */
 export const UPDATE_LOGS: UpdateLog[] = [
+  {
+    version: '1.2.1',
+    date: '2024-12-31',
+    title: { ko: '모바일 최적화 📱', en: 'Mobile Optimization 📱' },
+    changes: [
+      { ko: '모바일 UI 최적화 (미니맵/킬로그 제거)', en: 'Mobile UI optimization (removed minimap/killfeed)' },
+      { ko: '모바일 전용 컴팩트 랭킹 추가', en: 'Added compact mobile ranking' },
+      { ko: '튜토리얼 텍스트 수정 (킬 기반)', en: 'Fixed tutorial text (kill-based)' },
+      { ko: '캐릭터 얼굴 항상 표시', en: 'Character faces always visible' },
+      { ko: '화면 밖 플레이어 렌더링 최적화', en: 'Off-screen player rendering optimization' },
+    ],
+  },
   {
     version: '1.2.0',
     date: '2024-12-31',

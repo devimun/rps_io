@@ -120,16 +120,16 @@ export class PlayerRenderer {
     container: Phaser.GameObjects.Container,
     player: Player,
     isMe: boolean,
-    lowSpecMode: boolean
+    isMobile: boolean
   ): void {
-    // 위치 보간 (저사양 모드: 더 빠른 보간)
-    const lerpFactor = lowSpecMode ? 0.5 : 0.25;
+    // 위치 보간 (모바일: 더 빠른 보간)
+    const lerpFactor = isMobile ? 0.5 : 0.25;
     container.x = Phaser.Math.Linear(container.x, player.x, lerpFactor);
     container.y = Phaser.Math.Linear(container.y, player.y, lerpFactor);
 
     // 크기 보간
     const currentSize = container.getData('currentSize') as number;
-    const sizeLerpFactor = lowSpecMode ? 0.3 : 0.1;
+    const sizeLerpFactor = isMobile ? 0.3 : 0.1;
     const interpolatedSize = Phaser.Math.Linear(currentSize, player.size, sizeLerpFactor);
     container.setData('currentSize', interpolatedSize);
 
@@ -152,10 +152,8 @@ export class PlayerRenderer {
       // 본체 그리기 (상태 변경 시에만)
       this.drawBody(container, interpolatedSize, playerColor, rpsColor, isMe);
 
-      // 눈 그리기 (저사양 모드에서는 생략)
-      if (!lowSpecMode) {
-        this.drawEyes(container, interpolatedSize);
-      }
+      // 눈 그리기 (항상 표시 - 캐릭터 정체성)
+      this.drawEyes(container, interpolatedSize);
     }
 
     // 텍스트 업데이트 (상태 변경 시에만)

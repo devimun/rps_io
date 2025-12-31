@@ -21,7 +21,7 @@ export const GameCanvas = memo(function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
 
-  const lowSpecMode = useUIStore((state) => state.lowSpecMode);
+  const isMobile = useUIStore((state) => state.isMobile);
   const roomId = useGameStore((state) => state.roomId);
   const playerId = useGameStore((state) => state.playerId);
   const nickname = useGameStore((state) => state.nickname);
@@ -31,7 +31,7 @@ export const GameCanvas = memo(function GameCanvas() {
   useEffect(() => {
     if (gameRef.current || !containerRef.current) return;
 
-    const config = getGameConfig(lowSpecMode);
+    const config = getGameConfig(isMobile);
     gameRef.current = new Phaser.Game({
       ...config,
       parent: containerRef.current,
@@ -43,7 +43,7 @@ export const GameCanvas = memo(function GameCanvas() {
         gameRef.current = null;
       }
     };
-  }, [lowSpecMode]);
+  }, [isMobile]);
 
   // Socket.IO 연결
   useEffect(() => {

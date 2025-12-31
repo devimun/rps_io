@@ -3,7 +3,6 @@
  * 삼성 브라우저 등 저성능 브라우저에서 접속 시 크롬/사파리 사용을 권장합니다.
  */
 import { useState } from 'react';
-import { useUIStore } from '../../stores/uiStore';
 import type { SlowBrowserType } from '../../utils/deviceDetector';
 
 interface SlowBrowserWarningProps {
@@ -22,7 +21,6 @@ const BROWSER_NAMES: Record<Exclude<SlowBrowserType, null>, string> = {
  */
 export function SlowBrowserWarning({ browserType }: SlowBrowserWarningProps) {
   const [dismissed, setDismissed] = useState(false);
-  const { setLowSpecMode } = useUIStore();
 
   if (dismissed || !browserType) return null;
 
@@ -40,7 +38,6 @@ export function SlowBrowserWarning({ browserType }: SlowBrowserWarningProps) {
   /** 계속하기 */
   const handleContinue = () => {
     setDismissed(true);
-    setLowSpecMode(true);
   };
 
   return (
@@ -90,7 +87,7 @@ export function SlowBrowserWarning({ browserType }: SlowBrowserWarningProps) {
             className="w-full py-3 rounded-lg bg-slate-700 hover:bg-slate-600 
                        text-slate-300 transition-colors text-sm"
           >
-            그냥 계속하기 (저사양 모드)
+            그냥 계속하기
           </button>
         </nav>
       </article>

@@ -14,6 +14,7 @@ import { InAppWarning } from './components/ui/InAppWarning';
 import { SlowBrowserWarning } from './components/ui/SlowBrowserWarning';
 import { Minimap } from './components/ui/Minimap';
 import { KillFeed } from './components/ui/KillFeed';
+import { MobileRanking } from './components/ui/MobileRanking';
 import { FullscreenButton } from './components/ui/FullscreenButton';
 import { TransformTimer } from './components/ui/TransformTimer';
 import { InviteButtons } from './components/ui/InviteButtons';
@@ -31,8 +32,9 @@ function App() {
     showTutorial,
     tutorialDismissed,
     isInAppBrowser,
+    isMobile,
     setIsInAppBrowser,
-    setLowSpecMode,
+    setIsMobile,
   } = useUIStore();
 
   /** URL에서 추출한 방 코드 (다이렉트 입장용) */
@@ -47,10 +49,14 @@ function App() {
 
     const deviceInfo = detectDevice();
 
+    // 모바일 감지
+    if (deviceInfo.isMobile) {
+      setIsMobile(true);
+    }
+
     // 인앱 브라우저 감지
     if (deviceInfo.isInAppBrowser) {
       setIsInAppBrowser(true);
-      setLowSpecMode(true);
     }
 
     // 저성능 브라우저 감지 (모바일에서만)
@@ -64,7 +70,7 @@ function App() {
       setInitialRoomCode(roomCode);
       console.log('[App] Room code from URL:', roomCode);
     }
-  }, [setIsInAppBrowser, setLowSpecMode]);
+  }, [setIsInAppBrowser, setIsMobile]);
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
@@ -84,9 +90,16 @@ function App() {
           <GameCanvas />
           <TransformTimer />
           <InviteButtons />
-          <Ranking />
-          <Minimap />
-          <KillFeed />
+          {/* 모바일: 순위만 표시 (컴팩트), PC: 전체 UI */}
+          {isMobile ? (
+            <MobileRanking />
+          ) : (
+            <>
+              <Ranking />
+              <Minimap />
+              <KillFeed />
+            </>
+          )}
           <FullscreenButton />
         </div>
       )}
