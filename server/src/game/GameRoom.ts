@@ -56,6 +56,7 @@ export class GameRoomEntity implements IGameRoom {
   private spawnSystem: SpawnSystem;
   private dashSystem: DashSystem;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
+  private lastTickTime: number = 0;
   private lastRankingUpdate: number = 0;
   private readonly RANKING_UPDATE_INTERVAL = 1000; // 1초마다 랭킹 업데이트
   private onStateChange?: (state: GameStateUpdate) => void;
@@ -152,6 +153,7 @@ export class GameRoomEntity implements IGameRoom {
 
   startGameLoop(): void {
     if (this.tickTimer !== null) return;
+    this.lastTickTime = Date.now(); // 초기화로 첫 틱에서 순간이동 방지
     this.tickTimer = setInterval(() => this.tick(), TICK_INTERVAL_MS);
   }
 
@@ -183,8 +185,11 @@ export class GameRoomEntity implements IGameRoom {
 
   private tick(): void {
     const now = Date.now();
-    // 고정 deltaTime 사용 (서버 부하 시에도 일정한 이동)
-    const deltaTime = 1 / GAME_TICK_RATE;
+    // 실제 경과 시간 기반 deltaTime (최대 100ms로 제한 - 순간이동 방지)
+    const actualDelta = (now - this.lastTickTime) / 1000;
+    const deltaTime = Math.min(actualDelta, 0.1); // 최대 100ms
+    this.lastTickTime = now;
+
     this.updateBotAI(now);
     this.updateDash();
     this.movementSystem.update(this.getPlayers(), deltaTime, (id) => this.dashSystem.getSpeedMultiplier(id));

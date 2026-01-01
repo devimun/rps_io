@@ -4,7 +4,7 @@
  */
 
 /** 현재 앱 버전 */
-export const APP_VERSION = '1.4.0';
+export const APP_VERSION = '1.4.1';
 
 /** 빌드 날짜 */
 export const BUILD_DATE = '2026-01-02';
@@ -19,6 +19,16 @@ export interface UpdateLog {
 
 /** 업데이트 히스토리 (최신순) */
 export const UPDATE_LOGS: UpdateLog[] = [
+  {
+    version: '1.4.1',
+    date: '2026-01-02',
+    title: { ko: '안정성 개선 🔧', en: 'Stability Improvements 🔧' },
+    changes: [
+
+      { ko: '배포 환경 속도 일관성 수정', en: 'Fixed speed consistency in deployed environment' },
+      { ko: '초기 로딩 시 순간이동 버그 수정', en: 'Fixed teleporting bug on initial load' },
+    ],
+  },
   {
     version: '1.4.0',
     date: '2026-01-02',

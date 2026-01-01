@@ -61,7 +61,7 @@ export const SPAWN_EDGE_MARGIN = 100;
 export const SPAWN_INVINCIBILITY_MS = 3000;
 
 /** 기본 플레이어 속도 */
-export const DEFAULT_PLAYER_SPEED = 400;
+export const DEFAULT_PLAYER_SPEED = 330;
 
 /** 기본 플레이어 속도 (별칭) */
 export const BASE_SPEED = DEFAULT_PLAYER_SPEED;
