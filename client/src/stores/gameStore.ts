@@ -4,6 +4,7 @@
  */
 import { create } from 'zustand';
 import type { Player, RankingEntry, RPSState } from '@chaos-rps/shared';
+import { addSnapshot, removePlayerBuffer, clearAllBuffers } from '../services/interpolationService';
 
 /** 게임 연결 상태 */
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -116,7 +117,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   updatePlayers: (players, timestamp) => {
     const playersMap = new Map<string, Player>();
-    players.forEach((p) => playersMap.set(p.id, p));
+    players.forEach((p) => {
+      playersMap.set(p.id, p);
+      // 각 플레이어를 보간 버퍼에 추가
+      addSnapshot(p.id, p, timestamp);
+    });
 
     const { nickname } = get();
     // 닉네임으로 내 플레이어 찾기 (서버에서 생성된 ID가 다를 수 있음)
@@ -144,6 +149,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const { players } = get();
     const newPlayers = new Map(players);
     newPlayers.delete(playerId);
+    removePlayerBuffer(playerId); // 보간 버퍼도 제거
     set({ players: newPlayers });
   },
 
@@ -162,5 +168,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   clearDeathInfo: () =>
     set({ eliminatorNickname: null, deathMessage: null, eliminatorRpsState: null, eliminatedRpsState: null, finalKillCount: 0 }),
 
-  reset: () => set(initialState),
+  reset: () => {
+    clearAllBuffers(); // 모든 보간 버퍼 초기화
+    set(initialState);
+  },
 }));

@@ -79,22 +79,19 @@ export function calculateDirection(
 }
 
 /**
- * 플레이어의 속도를 업데이트합니다.
+ * 플레이어의 속도를 방향 각도 기반으로 계산합니다.
  *
- * @param player - 플레이어 객체
- * @param input - 이동 입력
- * @returns 업데이트된 속도 { velocityX, velocityY }
+ * @param angle - 이동 방향 각도 (라디안)
+ * @param speed - 이동 속도
+ * @returns 속도 벡터 { velocityX, velocityY }
  */
-export function updateVelocity(
-  player: Player,
-  input: PlayerMoveInput
+export function calculateVelocityFromAngle(
+  angle: number,
+  speed: number
 ): { velocityX: number; velocityY: number } {
-  const maxSpeed = calculateMaxSpeed(player.size);
-  const direction = calculateDirection(player.x, player.y, input.targetX, input.targetY);
-
   return {
-    velocityX: direction.dx * maxSpeed,
-    velocityY: direction.dy * maxSpeed,
+    velocityX: Math.cos(angle) * speed,
+    velocityY: Math.sin(angle) * speed,
   };
 }
 
@@ -175,13 +172,14 @@ export class MovementSystem {
   updatePlayer(player: Player, deltaTime: number, speedMultiplier: number = 1): void {
     const input = this.inputs.get(player.id);
 
-    if (input) {
-      // 입력이 있으면 속도 업데이트
-      const velocity = updateVelocity(player, input);
-      player.velocityX = velocity.velocityX * speedMultiplier;
-      player.velocityY = velocity.velocityY * speedMultiplier;
+    if (input && input.isMoving) {
+      // 방향 기반 속도 계산
+      const speed = calculateMaxSpeed(player.size) * speedMultiplier;
+      const velocity = calculateVelocityFromAngle(input.angle, speed);
+      player.velocityX = velocity.velocityX;
+      player.velocityY = velocity.velocityY;
     } else {
-      // 입력이 없으면 감속
+      // 입력이 없거나 정지 상태면 감속
       player.velocityX *= 0.9;
       player.velocityY *= 0.9;
 

@@ -29,15 +29,15 @@ const fastify = Fastify({
   logger: isProduction
     ? { level: 'info' }
     : {
-        level: 'info',
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            translateTime: 'HH:MM:ss Z',
-            ignore: 'pid,hostname',
-          },
+      level: 'info',
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          translateTime: 'HH:MM:ss Z',
+          ignore: 'pid,hostname',
         },
       },
+    },
 });
 
 /** 게임 매니저 초기화 */
@@ -73,7 +73,7 @@ function setupHealthCheck(): void {
   });
 
   fastify.get('/', async () => {
-    return { 
+    return {
       name: 'ChaosRPS.io API Server',
       status: 'running',
       timestamp: Date.now()
@@ -115,7 +115,7 @@ async function start(): Promise<void> {
     // Socket.IO 연결 핸들러
     io.on('connection', (socket: Socket<ClientToServerEvents, ServerToClientEvents>) => {
       const { roomId, playerId, nickname } = socket.handshake.query as { roomId?: string; playerId?: string; nickname?: string };
-      
+
       console.log(`🔌 클라이언트 연결: ${socket.id}, roomId: ${roomId}, playerId: ${playerId}, nickname: ${nickname}`);
       StatsService.playerConnected();
 
@@ -147,16 +147,16 @@ async function start(): Promise<void> {
       // player:ready 이벤트 처리
       socket.on('player:ready', () => {
         console.log(`✅ 플레이어 준비 완료: ${nickname} (${playerId})`);
-        
+
         // 플레이어를 게임 룸에 추가 (실제 닉네임 사용)
         const player = room.addPlayer(nickname, false);
         if (player) {
           console.log(`👤 플레이어 추가됨: ${player.nickname} (${player.id})`);
-          
+
           // 실제 playerId와 게임 내 player.id 매핑 업데이트
           playerSocketMap.set(player.id, socket.id);
           socketPlayerMap.set(socket.id, player.id);
-          
+
           // 게임 상태 콜백 설정
           room.setOnStateChange((state) => {
             io.to(roomId).emit('game:state', state);
@@ -211,11 +211,11 @@ async function start(): Promise<void> {
         }
       });
 
-      // player:move 이벤트 처리
+      // player:move 이벤트 처리 (방향 기반)
       socket.on('player:move', (input) => {
         const gamePlayerId = socketPlayerMap.get(socket.id);
         if (gamePlayerId) {
-          room.handlePlayerMove(gamePlayerId, input.targetX, input.targetY);
+          room.handlePlayerMove(gamePlayerId, input.angle, input.isMoving);
         }
       });
 
@@ -229,13 +229,20 @@ async function start(): Promise<void> {
 
       socket.on('disconnect', (reason) => {
         console.log(`🔌 클라이언트 연결 해제: ${socket.id} (${reason})`);
-        
+        StatsService.playerDisconnected();
+
         const gamePlayerId = socketPlayerMap.get(socket.id);
         if (gamePlayerId) {
           room.removePlayer(gamePlayerId);
-          playerRoomMap.delete(playerId);
+          // 모든 매핑 정리 (메모리 누수 방지)
+          playerRoomMap.delete(gamePlayerId);
           playerSocketMap.delete(gamePlayerId);
           socketPlayerMap.delete(socket.id);
+        }
+        // 초기 playerId도 정리
+        if (playerId) {
+          playerRoomMap.delete(playerId);
+          playerSocketMap.delete(playerId);
         }
       });
     });

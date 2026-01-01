@@ -1,9 +1,10 @@
 /**
  * 변신 타이머 + NEXT 박스 컴포넌트
- * 상단에 수직으로 NEXT 박스와 타이머 바를 표시합니다.
+ * NEXT 박스와 타이머 바 너비 통일
  */
 import { useEffect, useState, memo } from 'react';
 import { useGameStore } from '../../stores/gameStore';
+import { useUIStore } from '../../stores/uiStore';
 import { TRANSFORM_INTERVAL_MS } from '@chaos-rps/shared';
 import type { RPSState } from '@chaos-rps/shared';
 
@@ -29,15 +30,15 @@ const RPS_NAMES: Record<RPSState, string> = {
 };
 
 /**
- * 변신 타이머 컴포넌트 (NEXT 박스 위, 타이머 아래)
+ * 변신 타이머 컴포넌트 (NEXT 박스와 너비 통일)
  */
 export const TransformTimer = memo(function TransformTimer() {
   const myPlayer = useGameStore((state) => state.myPlayer);
   const connectionStatus = useGameStore((state) => state.connectionStatus);
+  const isMobile = useUIStore((state) => state.isMobile);
   const [progress, setProgress] = useState(1);
   const [isWarning, setIsWarning] = useState(false);
 
-  // 타이머 업데이트 (부드러운 애니메이션을 위해 자주 업데이트)
   useEffect(() => {
     if (!myPlayer?.lastTransformTime) return;
 
@@ -54,48 +55,71 @@ export const TransformTimer = memo(function TransformTimer() {
     return () => clearInterval(interval);
   }, [myPlayer?.lastTransformTime]);
 
-  // 연결되지 않았거나 플레이어가 없으면 표시하지 않음
   if (connectionStatus !== 'connected' || !myPlayer) return null;
 
   const nextState = myPlayer.nextRpsState;
   if (!nextState) return null;
 
+  // 통일된 너비: 모바일 50vw, PC 200px
+  const boxWidth = isMobile ? '50vw' : '200px';
+
   return (
-    <div className="fixed top-[12%] left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-3">
-      {/* 다음 상태 (NEXT) - 위에 배치 */}
-      <div 
-        className="flex items-center gap-4 px-8 py-4 rounded-2xl"
-        style={{ 
+    <div
+      className="fixed left-1/2 -translate-x-1/2 z-50 flex flex-col items-center"
+      style={{
+        top: isMobile ? '8%' : '12%',
+        gap: isMobile ? '1.5vw' : '8px',
+      }}
+    >
+      {/* 다음 상태 (NEXT) */}
+      <div
+        className="flex items-center justify-center rounded-xl"
+        style={{
+          width: boxWidth,
           backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          border: `3px solid ${RPS_COLORS[nextState]}`,
-          boxShadow: `0 0 30px ${RPS_COLORS[nextState]}50`,
+          border: `2px solid ${RPS_COLORS[nextState]}`,
+          boxShadow: `0 0 20px ${RPS_COLORS[nextState]}40`,
+          padding: isMobile ? '2vw' : '12px',
+          gap: isMobile ? '2vw' : '12px',
         }}
       >
-        <span className="text-base text-gray-400 font-bold">NEXT</span>
-        <span className="text-5xl">{RPS_EMOJI[nextState]}</span>
-        <span 
-          className="text-xl font-bold"
-          style={{ color: RPS_COLORS[nextState] }}
+        <span
+          className="text-gray-400 font-bold"
+          style={{ fontSize: isMobile ? '2.5vw' : '12px' }}
+        >
+          NEXT
+        </span>
+        <span style={{ fontSize: isMobile ? '7vw' : '36px' }}>
+          {RPS_EMOJI[nextState]}
+        </span>
+        <span
+          className="font-bold"
+          style={{
+            color: RPS_COLORS[nextState],
+            fontSize: isMobile ? '3vw' : '16px',
+          }}
         >
           {RPS_NAMES[nextState]}
         </span>
       </div>
 
-      {/* 타이머 바 (줄어드는 바) - 아래에 배치 */}
-      <div 
-        className="w-72 h-6 rounded-full overflow-hidden"
-        style={{ 
+      {/* 타이머 바 (NEXT 박스와 동일 너비) */}
+      <div
+        className="rounded-full overflow-hidden"
+        style={{
+          width: boxWidth,
+          height: isMobile ? '1.5vh' : '16px',
           backgroundColor: 'rgba(0, 0, 0, 0.6)',
-          border: isWarning ? '3px solid #ff6b6b' : '3px solid rgba(255,255,255,0.3)',
-          boxShadow: isWarning ? '0 0 25px rgba(255, 100, 100, 0.6)' : 'none',
+          border: isWarning ? '2px solid #ff6b6b' : '2px solid rgba(255,255,255,0.2)',
+          boxShadow: isWarning ? '0 0 15px rgba(255, 100, 100, 0.5)' : 'none',
         }}
       >
-        <div 
+        <div
           className={`h-full rounded-full ${isWarning ? 'animate-pulse' : ''}`}
-          style={{ 
+          style={{
             width: `${progress * 100}%`,
             backgroundColor: isWarning ? '#ff6b6b' : RPS_COLORS[nextState],
-            boxShadow: `0 0 15px ${isWarning ? '#ff6b6b' : RPS_COLORS[nextState]}`,
+            boxShadow: `0 0 10px ${isWarning ? '#ff6b6b' : RPS_COLORS[nextState]}`,
             transition: 'background-color 0.3s',
           }}
         />

@@ -1,11 +1,13 @@
 /**
  * 플레이어 렌더러
  * 플레이어 스프라이트 생성 및 업데이트 로직을 담당합니다.
+ * Slither.io 스타일 Entity Interpolation 적용
  */
 import Phaser from 'phaser';
 import type { Player, RPSState } from '@chaos-rps/shared';
 import { DASH_COOLDOWN_MS } from '@chaos-rps/shared';
 import { useGameStore } from '../stores/gameStore';
+import { getInterpolatedPosition, hasBuffer } from '../services/interpolationService';
 
 /** RPS 상태별 색상 */
 export const RPS_COLORS: Record<RPSState, number> = {
@@ -91,6 +93,16 @@ export class PlayerRenderer {
     container.add(nameText);
     container.setData('nameText', nameText);
 
+    // 왕관 텍스트 (1등 플레이어용)
+    const crownText = this.scene.add.text(0, -player.size - 55, '👑', {
+      fontSize: '16px',
+    });
+    crownText.setOrigin(0.5);
+    crownText.setVisible(false);
+    container.add(crownText);
+    container.setData('crownText', crownText);
+    container.setData('isFirstPlace', false);
+
     // 대시바 (내 플레이어만)
     if (isMe) {
       const dashBar = this.scene.add.graphics();
@@ -115,6 +127,7 @@ export class PlayerRenderer {
 
   /**
    * 플레이어 스프라이트 업데이트
+   * Slither.io 스타일: 상태 버퍼에서 보간된 위치 사용
    */
   updateSprite(
     container: Phaser.GameObjects.Container,
@@ -122,15 +135,29 @@ export class PlayerRenderer {
     isMe: boolean,
     isMobile: boolean
   ): void {
-    // 위치 보간 (모바일: 더 빠른 보간)
-    const lerpFactor = isMobile ? 0.5 : 0.25;
-    container.x = Phaser.Math.Linear(container.x, player.x, lerpFactor);
-    container.y = Phaser.Math.Linear(container.y, player.y, lerpFactor);
+    // Entity Interpolation: 버퍼에서 보간된 위치 가져오기
+    let targetX = player.x;
+    let targetY = player.y;
+    let targetSize = player.size;
+
+    if (hasBuffer(player.id)) {
+      const interpolated = getInterpolatedPosition(player.id, Date.now());
+      if (interpolated) {
+        targetX = interpolated.x;
+        targetY = interpolated.y;
+        targetSize = interpolated.size;
+      }
+    }
+
+    // 위치 보간 (개선된 lerp - 더 부드러움)
+    const lerpFactor = isMobile ? 0.4 : 0.3;
+    container.x = Phaser.Math.Linear(container.x, targetX, lerpFactor);
+    container.y = Phaser.Math.Linear(container.y, targetY, lerpFactor);
 
     // 크기 보간
     const currentSize = container.getData('currentSize') as number;
-    const sizeLerpFactor = isMobile ? 0.3 : 0.1;
-    const interpolatedSize = Phaser.Math.Linear(currentSize, player.size, sizeLerpFactor);
+    const sizeLerpFactor = isMobile ? 0.3 : 0.15;
+    const interpolatedSize = Phaser.Math.Linear(currentSize, targetSize, sizeLerpFactor);
     container.setData('currentSize', interpolatedSize);
 
     const playerColor = container.getData('playerColor') as number;
@@ -166,6 +193,33 @@ export class PlayerRenderer {
       nameText.setY(-interpolatedSize - 40);
     }
 
+    // 1등 왕관 업데이트
+    const rankings = useGameStore.getState().rankings;
+    const isFirstPlace = rankings.length > 0 && rankings[0].playerId === player.id;
+    const wasFirstPlace = container.getData('isFirstPlace') as boolean;
+
+    if (isFirstPlace !== wasFirstPlace) {
+      container.setData('isFirstPlace', isFirstPlace);
+      const crownText = container.getData('crownText') as Phaser.GameObjects.Text;
+      const nameText = container.getData('nameText') as Phaser.GameObjects.Text;
+
+      if (isFirstPlace) {
+        crownText.setVisible(true);
+        crownText.setY(-interpolatedSize - 55);
+        // 1등 닉네임 금색 배경
+        nameText.setBackgroundColor('#d4a017');
+        nameText.setPadding(4, 2, 4, 2);
+      } else {
+        crownText.setVisible(false);
+        nameText.setBackgroundColor('');
+        nameText.setPadding(0, 0, 0, 0);
+      }
+    } else if (isFirstPlace) {
+      // 위치 업데이트
+      const crownText = container.getData('crownText') as Phaser.GameObjects.Text;
+      crownText.setY(-interpolatedSize - 55);
+    }
+
     // 대시바 업데이트 (내 플레이어만)
     if (isMe) {
       this.drawDashBar(container, interpolatedSize);
@@ -179,19 +233,20 @@ export class PlayerRenderer {
     container: Phaser.GameObjects.Container,
     size: number,
     playerColor: number,
-    rpsColor: number,
+    _rpsColor: number, // 더 이상 사용하지 않음
     isMe: boolean
   ): void {
     const body = container.getData('body') as Phaser.GameObjects.Graphics;
     body.clear();
-    body.fillStyle(rpsColor, 1);
-    body.fillCircle(0, 0, size + 4);
+
+    // 본체만 그림 (RPS 색상 테두리 제거)
     body.fillStyle(playerColor, 1);
     body.fillCircle(0, 0, size);
 
+    // 내 캐릭터만 흰색 테두리
     if (isMe) {
       body.lineStyle(3, 0xffffff, 1);
-      body.strokeCircle(0, 0, size + 6);
+      body.strokeCircle(0, 0, size + 2);
     }
   }
 
@@ -252,13 +307,13 @@ export class PlayerRenderer {
     const lastProgress = container.getData('lastDashProgress') as number | undefined;
     const lastIsDashing = container.getData('lastIsDashing') as boolean | undefined;
     const progressRounded = Math.round(progress * 20) / 20; // 5% 단위로 반올림
-    
+
     if (lastProgress === progressRounded && lastIsDashing === isDashing) {
       // 위치만 업데이트
       if (boostText) boostText.setY(size + 32);
       return;
     }
-    
+
     container.setData('lastDashProgress', progressRounded);
     container.setData('lastIsDashing', isDashing);
 

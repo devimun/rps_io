@@ -1,6 +1,7 @@
 /**
  * 메인 게임 씬
  * 실제 게임 플레이가 이루어지는 씬입니다.
+ * Slither.io 스타일: 항상 마우스/터치 방향으로 이동
  */
 import Phaser from 'phaser';
 import { SCENE_KEYS } from './PreloadScene';
@@ -9,21 +10,10 @@ import { useUIStore } from '../../stores/uiStore';
 import { socketService } from '../../services/socketService';
 import type { Player } from '@chaos-rps/shared';
 import { WORLD_SIZE } from '@chaos-rps/shared';
-import { VirtualJoystick } from '../VirtualJoystick';
-import { BoostButton } from '../BoostButton';
 import { PlayerRenderer } from '../PlayerRenderer';
 
 /** 게임 월드 크기 */
 const WORLD_CONFIG = { WIDTH: WORLD_SIZE, HEIGHT: WORLD_SIZE };
-
-/**
- * 모바일 디바이스 감지
- */
-function isMobileDevice(): boolean {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent
-  ) || ('ontouchstart' in window);
-}
 
 /** 마지막 대시 요청 시간 (클라이언트 쓰로틀링) */
 let lastDashRequestTime = 0;
@@ -44,10 +34,10 @@ function canDash(): boolean {
  */
 function tryDash(): void {
   const now = Date.now();
-  
+
   // 클라이언트 쓰로틀링: 너무 빠른 연속 요청 방지
   if (now - lastDashRequestTime < DASH_REQUEST_THROTTLE) return;
-  
+
   if (canDash()) {
     lastDashRequestTime = now;
     socketService.sendDash();
@@ -56,37 +46,43 @@ function tryDash(): void {
 
 /**
  * 메인 게임 씬 클래스
+ * Slither.io 스타일: 항상 마우스/터치 방향으로 이동, 절대 멈추지 않음
  */
 export class MainScene extends Phaser.Scene {
   private playerSprites: Map<string, Phaser.GameObjects.Container> = new Map();
-  private lastMoveTime = 0;
-  private readonly moveInterval = 50;
-  private virtualJoystick: VirtualJoystick | null = null;
-  private boostButton: BoostButton | null = null;
-  private isMobile = false;
+  private readonly moveInterval = 50; // 50ms = 20Hz 입력 전송
   private playerRenderer!: PlayerRenderer;
+
+  /** 현재 이동 방향 각도 */
+  private currentAngle = 0;
+  /** 마지막 터치 시간 (더블탭 감지용) */
+  private lastTapTime = 0;
 
   constructor() {
     super({ key: SCENE_KEYS.MAIN });
   }
 
   create(): void {
-    this.isMobile = isMobileDevice();
     this.playerRenderer = new PlayerRenderer(this);
+
+    // 모바일 감지
+    const isTouchDevice = 'ontouchstart' in window;
 
     this.cameras.main.setBackgroundColor('#16213e');
     this.physics.world.setBounds(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
     this.cameras.main.setBounds(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
-    this.cameras.main.setZoom(1.0);
+    this.cameras.main.setZoom(isTouchDevice ? 0.6 : 1.0);
 
     this.createGrid();
     this.setupInput();
 
-    // 모바일: 조이스틱 + 부스트 버튼 (항상 표시)
-    if (this.isMobile) {
-      this.virtualJoystick = new VirtualJoystick(this);
-      this.boostButton = new BoostButton(this, tryDash);
-    }
+    // 주기적 입력 전송 (항상 이동)
+    this.time.addEvent({
+      delay: this.moveInterval,
+      callback: this.sendCurrentDirection,
+      callbackScope: this,
+      loop: true,
+    });
   }
 
   /**
@@ -94,10 +90,11 @@ export class MainScene extends Phaser.Scene {
    */
   private createGrid(): void {
     const graphics = this.add.graphics();
-    const gridSize = this.isMobile ? 200 : 100;
+    const isMobile = useUIStore.getState().isMobile;
+    const gridSize = isMobile ? 200 : 100;
 
     // 점 패턴 배경 (모바일에서는 간소화)
-    if (!this.isMobile) {
+    if (!isMobile) {
       graphics.fillStyle(0x2a3a5e, 1);
       for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += gridSize) {
         for (let y = 0; y <= WORLD_CONFIG.HEIGHT; y += gridSize) {
@@ -119,7 +116,7 @@ export class MainScene extends Phaser.Scene {
     graphics.strokePath();
 
     // 작은 그리드 선 (모바일에서는 생략)
-    if (!this.isMobile) {
+    if (!isMobile) {
       graphics.lineStyle(1, 0x1e2d4a, 0.5);
       for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += gridSize) {
         graphics.moveTo(x, 0);
@@ -131,14 +128,14 @@ export class MainScene extends Phaser.Scene {
       }
       graphics.strokePath();
     }
-    
+
     // 월드 경계선
     const border = this.add.graphics();
     border.lineStyle(8, 0xff4444, 1);
     border.strokeRect(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
-    
+
     // 경계 경고 영역 (모바일에서는 생략)
-    if (!this.isMobile) {
+    if (!isMobile) {
       const warningZone = this.add.graphics();
       warningZone.fillStyle(0xff0000, 0.1);
       const w = 50;
@@ -149,71 +146,74 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * 입력 설정 - Slither.io 스타일
+   */
   private setupInput(): void {
-    this.input.on('pointermove', this.handlePointerMove, this);
-    this.input.on('pointerdown', this.handlePointerDown, this);
-    
-    // 대시: 마우스 클릭 (PC)
+    const isTouchDevice = 'ontouchstart' in window;
+    const DOUBLE_TAP_THRESHOLD = 300; // 300ms 이내 더블탭
+
+    // 포인터 다운 (터치 시작 또는 마우스 클릭)
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (!this.isMobile && (pointer.leftButtonDown() || pointer.rightButtonDown())) {
-        tryDash();
+      // 방향 업데이트
+      this.updateAngleFromPointer(pointer);
+
+      if (isTouchDevice) {
+        // 모바일: 더블탭으로 대시
+        const now = Date.now();
+        if (now - this.lastTapTime < DOUBLE_TAP_THRESHOLD) {
+          tryDash();
+        }
+        this.lastTapTime = now;
+      } else {
+        // PC: 좌클릭으로 대시
+        if (pointer.leftButtonDown()) {
+          tryDash();
+        }
       }
     });
-    
-    this.time.addEvent({
-      delay: this.moveInterval,
-      callback: this.sendCurrentPointerPosition,
-      callbackScope: this,
-      loop: true,
+
+    // 포인터 이동 - 항상 방향 업데이트
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      this.updateAngleFromPointer(pointer);
+    });
+
+    // 터치 이동 (모바일)
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.isDown || !isTouchDevice) {
+        this.updateAngleFromPointer(pointer);
+      }
     });
   }
 
-  private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.isMobile) return;
-    this.handlePointerMove(pointer);
-  }
+  /**
+   * 포인터 위치에서 방향 각도 계산
+   */
+  private updateAngleFromPointer(pointer: Phaser.Input.Pointer): void {
+    const { myPlayer } = useGameStore.getState();
+    if (!myPlayer) return;
 
-  private sendCurrentPointerPosition(): void {
-    const { playerId, myPlayer } = useGameStore.getState();
-    if (!playerId || !myPlayer) return;
-
-    if (this.isMobile && this.virtualJoystick) {
-      const direction = this.virtualJoystick.getDirection();
-      const force = this.virtualJoystick.getForce();
-
-      if (this.virtualJoystick.getIsActive() && force > 0.1) {
-        socketService.sendMove({
-          targetX: myPlayer.x + direction.x * 200,
-          targetY: myPlayer.y + direction.y * 200,
-          timestamp: Date.now(),
-        });
-      }
-      return;
-    }
-
-    const pointer = this.input.activePointer;
     const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const dx = worldPoint.x - myPlayer.x;
+    const dy = worldPoint.y - myPlayer.y;
+
+    // 방향 업데이트 (거리와 상관없이)
+    this.currentAngle = Math.atan2(dy, dx);
+  }
+
+  /**
+   * 현재 방향을 서버에 전송 - 항상 이동중 (isMoving: true)
+   */
+  private sendCurrentDirection(): void {
+    const { myPlayer } = useGameStore.getState();
+    if (!myPlayer) return;
+
+    // Slither.io 스타일: 항상 이동
     socketService.sendMove({
-      targetX: worldPoint.x,
-      targetY: worldPoint.y,
+      angle: this.currentAngle,
+      isMoving: true,  // 절대 멈추지 않음!
       timestamp: Date.now(),
     });
-  }
-
-  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
-    const now = Date.now();
-    if (now - this.lastMoveTime < this.moveInterval) return;
-
-    const { playerId } = useGameStore.getState();
-    if (!playerId) return;
-
-    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    socketService.sendMove({
-      targetX: worldPoint.x,
-      targetY: worldPoint.y,
-      timestamp: now,
-    });
-    this.lastMoveTime = now;
   }
 
   update(): void {
@@ -221,12 +221,8 @@ export class MainScene extends Phaser.Scene {
     const { isMobile } = useUIStore.getState();
     const myPlayerId = myPlayer?.id ?? null;
 
-    if (this.boostButton) {
-      this.boostButton.update();
-    }
-
     // 모바일 성능 최적화: 화면 밖 플레이어 업데이트 스킵
-    const visiblePlayers = isMobile 
+    const visiblePlayers = isMobile
       ? this.getVisiblePlayers(players, myPlayer)
       : players;
 
@@ -306,17 +302,7 @@ export class MainScene extends Phaser.Scene {
   shutdown(): void {
     this.playerSprites.forEach((sprite) => sprite.destroy());
     this.playerSprites.clear();
-    this.input.off('pointermove', this.handlePointerMove, this);
-    this.input.off('pointerdown', this.handlePointerMove, this);
-    
-    if (this.virtualJoystick) {
-      this.virtualJoystick.destroy();
-      this.virtualJoystick = null;
-    }
-    
-    if (this.boostButton) {
-      this.boostButton.destroy();
-      this.boostButton = null;
-    }
+    this.input.off('pointermove');
+    this.input.off('pointerdown');
   }
 }

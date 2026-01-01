@@ -17,7 +17,7 @@ import {
   WORLD_SIZE,
 } from '@chaos-rps/shared';
 import { PlayerEntity } from './Player';
-import { BotEntity, generateBotName } from './Bot';
+import { BotEntity, generateBotName, releaseBotName } from './Bot';
 import { TransformSystem } from '../systems/TransformSystem';
 import { checkCollision } from '../systems/CollisionSystem';
 import { MovementSystem, WorldBounds } from '../systems/MovementSystem';
@@ -56,7 +56,6 @@ export class GameRoomEntity implements IGameRoom {
   private spawnSystem: SpawnSystem;
   private dashSystem: DashSystem;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
-  private lastTickTime: number = 0;
   private lastRankingUpdate: number = 0;
   private readonly RANKING_UPDATE_INTERVAL = 1000; // 1초마다 랭킹 업데이트
   private onStateChange?: (state: GameStateUpdate) => void;
@@ -97,7 +96,7 @@ export class GameRoomEntity implements IGameRoom {
     } else if (this.players.size >= this.maxPlayers) {
       return null;
     }
-    
+
     // 격자 기반 스폰 시스템으로 안전한 위치 찾기
     const existingPlayers = this.getPlayers().map(p => p.toJSON());
     const spawnPos = this.spawnSystem.findSafeSpawnPosition(existingPlayers);
@@ -120,6 +119,11 @@ export class GameRoomEntity implements IGameRoom {
   }
 
   removePlayer(playerId: string): boolean {
+    const player = this.players.get(playerId);
+    // 봇이면 닉네임 해제
+    if (player && player.isBot) {
+      releaseBotName(player.nickname);
+    }
     this.movementSystem.removeInput(playerId);
     this.dashSystem.removePlayer(playerId);
     return this.players.delete(playerId);
@@ -148,7 +152,6 @@ export class GameRoomEntity implements IGameRoom {
 
   startGameLoop(): void {
     if (this.tickTimer !== null) return;
-    this.lastTickTime = Date.now();
     this.tickTimer = setInterval(() => this.tick(), TICK_INTERVAL_MS);
   }
 
@@ -156,8 +159,8 @@ export class GameRoomEntity implements IGameRoom {
     if (this.tickTimer !== null) { clearInterval(this.tickTimer); this.tickTimer = null; }
   }
 
-  handlePlayerMove(playerId: string, targetX: number, targetY: number): void {
-    this.movementSystem.setInput(playerId, { targetX, targetY, timestamp: Date.now() });
+  handlePlayerMove(playerId: string, angle: number, isMoving: boolean): void {
+    this.movementSystem.setInput(playerId, { angle, isMoving, timestamp: Date.now() });
   }
 
   /** 플레이어 대시 처리 */
@@ -180,8 +183,8 @@ export class GameRoomEntity implements IGameRoom {
 
   private tick(): void {
     const now = Date.now();
-    const deltaTime = (now - this.lastTickTime) / 1000;
-    this.lastTickTime = now;
+    // 고정 deltaTime 사용 (서버 부하 시에도 일정한 이동)
+    const deltaTime = 1 / GAME_TICK_RATE;
     this.updateBotAI(now);
     this.updateDash();
     this.movementSystem.update(this.getPlayers(), deltaTime, (id) => this.dashSystem.getSpeedMultiplier(id));
@@ -195,7 +198,7 @@ export class GameRoomEntity implements IGameRoom {
   /** 봇 수를 유지합니다 (20명 유지) */
   private maintainBotCount(): void {
     if (!this.fillWithBots) return;
-    
+
     const currentCount = this.players.size;
     if (currentCount < this.maxPlayers) {
       // 한 틱에 1명씩만 추가 (급격한 변화 방지)
@@ -211,7 +214,7 @@ export class GameRoomEntity implements IGameRoom {
   private updateRanking(now: number): void {
     if (now - this.lastRankingUpdate < this.RANKING_UPDATE_INTERVAL) return;
     this.lastRankingUpdate = now;
-    
+
     const players = this.getPlayers().map(p => p.toJSON());
     const rankings = calculateRanking(players, 10);
     this.onRankingUpdate?.(rankings);
@@ -233,11 +236,11 @@ export class GameRoomEntity implements IGameRoom {
       if (player instanceof BotEntity) {
         player.updateAI(allPlayers.map(p => p.toJSON()), currentTime);
         const decision = player.getDecision();
-        // 모든 상태에서 이동 (idle도 배회)
-        const speed = decision.action === 'chase' ? 200 : decision.action === 'flee' ? 250 : 120;
-        const targetX = player.x + decision.direction.x * speed;
-        const targetY = player.y + decision.direction.y * speed;
-        this.movementSystem.setInput(player.id, { targetX, targetY, timestamp: currentTime });
+        // 방향 벡터에서 각도 계산
+        const angle = Math.atan2(decision.direction.y, decision.direction.x);
+        const isMoving = decision.action !== 'idle' ||
+          (decision.direction.x !== 0 || decision.direction.y !== 0);
+        this.movementSystem.setInput(player.id, { angle, isMoving, timestamp: currentTime });
       }
     }
   }
@@ -245,13 +248,13 @@ export class GameRoomEntity implements IGameRoom {
   private updateTransforms(): void {
     const playerIds = this.getPlayers().map(p => p.id);
     const events = this.transformSystem.update(playerIds);
-    
+
     // 변신 이벤트 처리
     for (const event of events) {
       const player = this.players.get(event.playerId);
       if (player) player.setRPSState(event.newState);
     }
-    
+
     // 모든 플레이어의 lastTransformTime을 전역 시간으로 설정
     const lastGlobalTime = this.transformSystem.getLastGlobalTransformTime();
     for (const player of this.players.values()) {
@@ -266,11 +269,11 @@ export class GameRoomEntity implements IGameRoom {
       for (let j = i + 1; j < players.length; j++) {
         const p1 = players[i], p2 = players[j];
         if (toRemove.includes(p1.id) || toRemove.includes(p2.id)) continue;
-        
+
         if (!checkCollision(p1, p2)) continue;
-        
+
         const result = determineCollisionResult(p1.rpsState, p2.rpsState);
-        
+
         this.handleCollisionResult(p1, p2, result, toRemove);
       }
     }
@@ -324,7 +327,7 @@ export class GameRoomEntity implements IGameRoom {
 
   private broadcastState(): void {
     if (!this.onStateChange) return;
-    
+
     // 각 플레이어의 nextRpsState 포함
     const playersWithNext = this.getPlayers().map(p => {
       const json = p.toJSON();
@@ -332,7 +335,7 @@ export class GameRoomEntity implements IGameRoom {
       json.nextRpsState = this.transformSystem.getNextState(p.id);
       return json;
     });
-    
+
     this.onStateChange({ players: playersWithNext, timestamp: Date.now() });
   }
 

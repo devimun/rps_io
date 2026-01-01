@@ -4,10 +4,10 @@
  */
 
 /** 현재 앱 버전 */
-export const APP_VERSION = '1.2.1';
+export const APP_VERSION = '1.4.0';
 
 /** 빌드 날짜 */
-export const BUILD_DATE = '2024-12-31';
+export const BUILD_DATE = '2026-01-02';
 
 /** 업데이트 로그 타입 */
 export interface UpdateLog {
@@ -19,6 +19,20 @@ export interface UpdateLog {
 
 /** 업데이트 히스토리 (최신순) */
 export const UPDATE_LOGS: UpdateLog[] = [
+  {
+    version: '1.4.0',
+    date: '2026-01-02',
+    title: { ko: '슬리더 스타일 업데이트 🐍', en: 'Slither Style Update 🐍' },
+    changes: [
+      { ko: '이동 시스템 업데이트', en: 'movement system update' },
+      { ko: 'Entity Interpolation으로 부드러운 움직임', en: 'Smooth movement with Entity Interpolation' },
+      { ko: '1등 플레이어에게 왕관 👑 표시', en: 'Crown 👑 for 1st place player' },
+      { ko: 'RPS 색상 테두리 제거 (이모지로 충분)', en: 'Removed RPS color border (emoji is enough)' },
+      { ko: 'UI 통일 및 모바일 viewport 비율 기반 크기', en: 'Unified UI with mobile viewport-based sizing' },
+      { ko: '미니맵 점 색상을 본체 색상으로 변경', en: 'Minimap dots now use player body color' },
+      { ko: '플레이어 속도 300 → 400 증가', en: 'Increased player speed 300 → 400' },
+    ],
+  },
   {
     version: '1.2.1',
     date: '2024-12-31',
@@ -86,11 +100,11 @@ export const NOTICES: Notice[] = [
   {
     id: 'launch-notice',
     type: 'event',
-    title: { 
-      ko: '🎮 ChaosRPS.io 정식 출시!', 
-      en: '🎮 ChaosRPS.io Official Launch!' 
+    title: {
+      ko: '🎮 ChaosRPS.io 정식 출시!',
+      en: '🎮 ChaosRPS.io Official Launch!'
     },
-    content: { 
+    content: {
       ko: '가위바위보 배틀로얄에 오신 것을 환영합니다. 친구들과 함께 즐겨보세요!',
       en: 'Welcome to RPS Battle Royale. Enjoy with your friends!'
     },

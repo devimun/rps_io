@@ -1,33 +1,39 @@
 /**
  * 미니맵 컴포넌트 (성능 최적화 버전)
  * 전체 맵에서 플레이어들의 위치를 표시합니다.
- * 
- * 최적화:
- * - Canvas 기반 렌더링으로 DOM 조작 최소화
- * - 200ms 간격 업데이트 (5fps)
- * - requestAnimationFrame 대신 setInterval 사용
+ * 플레이어 점 색상: 본체(닉네임 기반) 색상 사용
  */
 import { useEffect, useRef, memo } from 'react';
 import { useGameStore } from '../../stores/gameStore';
+import { useUIStore } from '../../stores/uiStore';
 import { WORLD_SIZE } from '@chaos-rps/shared';
-import type { RPSState } from '@chaos-rps/shared';
 
-/** RPS 상태별 색상 */
-const RPS_COLORS: Record<RPSState, string> = {
-  rock: '#4ecdc4',
-  paper: '#ffe66d',
-  scissors: '#ff6b6b',
-};
+/** 플레이어 색상 팔레트 (닉네임 해시 기반) */
+const PLAYER_COLORS = [
+  '#ff6b6b', '#4ecdc4', '#ffe66d', '#95e1d3', '#f38181',
+  '#aa96da', '#fcbad3', '#a8d8ea', '#f9ed69', '#b8de6f',
+];
 
-/** 미니맵 크기 설정 */
-const MINIMAP_SIZE = 120;
-const SCALE = MINIMAP_SIZE / WORLD_SIZE;
+/** 닉네임 기반 색상 인덱스 */
+function getPlayerColorIndex(nickname: string): number {
+  let hash = 0;
+  for (let i = 0; i < nickname.length; i++) {
+    hash = nickname.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash) % PLAYER_COLORS.length;
+}
 
 /**
- * 미니맵 컴포넌트 (Canvas 기반)
+ * 미니맵 컴포넌트 (Canvas 기반, 본체 색상 사용)
  */
 export const Minimap = memo(function Minimap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isMobile = useUIStore((state) => state.isMobile);
+
+  const MINIMAP_SIZE = isMobile
+    ? Math.min(window.innerWidth * 0.2, 100)
+    : 120;
+  const SCALE = MINIMAP_SIZE / WORLD_SIZE;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,11 +42,9 @@ export const Minimap = memo(function Minimap() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // 200ms 간격으로 미니맵 업데이트 (성능 최적화)
     const draw = () => {
       const { players, myPlayer } = useGameStore.getState();
-      
-      // 캔버스 클리어
+
       ctx.clearRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
 
       // 배경
@@ -62,23 +66,23 @@ export const Minimap = memo(function Minimap() {
         ctx.stroke();
       }
 
-      // 플레이어 점 그리기
+      // 플레이어 점 (본체 색상 사용)
       players.forEach((player, id) => {
         const isMe = myPlayer?.id === id;
         const x = player.x * SCALE;
         const y = player.y * SCALE;
-        const color = RPS_COLORS[player.rpsState];
-        const radius = isMe ? 4 : 2;
+        // RPS 색상 대신 닉네임 기반 본체 색상 사용
+        const color = PLAYER_COLORS[getPlayerColorIndex(player.nickname)];
+        const radius = isMe ? (isMobile ? 3 : 4) : (isMobile ? 1.5 : 2);
 
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fillStyle = color;
         ctx.fill();
 
-        // 내 플레이어는 테두리 추가
         if (isMe) {
           ctx.strokeStyle = 'white';
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 2;
           ctx.stroke();
         }
       });
@@ -92,17 +96,25 @@ export const Minimap = memo(function Minimap() {
     draw();
     const interval = setInterval(draw, 100);
     return () => clearInterval(interval);
-  }, []);
+  }, [isMobile, MINIMAP_SIZE, SCALE]);
 
   return (
-    <div className="fixed bottom-4 right-4 z-30">
+    <div
+      className="fixed z-30"
+      style={{
+        bottom: isMobile ? '2vw' : '16px',
+        right: isMobile ? '2vw' : '16px',
+      }}
+    >
       <canvas
         ref={canvasRef}
         width={MINIMAP_SIZE}
         height={MINIMAP_SIZE}
         className="rounded-lg"
       />
-      <div className="absolute bottom-0.5 left-1 text-[8px] text-white/50">MAP</div>
+      {!isMobile && (
+        <div className="absolute bottom-0.5 left-1 text-[8px] text-white/50">MAP</div>
+      )}
     </div>
   );
 });

@@ -90,9 +90,12 @@ function App() {
           <GameCanvas />
           <TransformTimer />
           <InviteButtons />
-          {/* 모바일: 순위만 표시 (컴팩트), PC: 전체 UI */}
+          {/* 모바일: 랭킹 + 미니맵, PC: 전체 UI */}
           {isMobile ? (
-            <MobileRanking />
+            <>
+              <MobileRanking />
+              <Minimap />
+            </>
           ) : (
             <>
               <Ranking />

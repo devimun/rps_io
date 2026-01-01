@@ -150,10 +150,10 @@ export interface GameStateUpdate {
  * 클라이언트에서 서버로 전송되는 이동 의도
  */
 export interface PlayerMoveInput {
-  /** 목표 X 좌표 */
-  targetX: number;
-  /** 목표 Y 좌표 */
-  targetY: number;
+  /** 이동 방향 각도 (라디안, 0 = 오른쪽, Math.PI/2 = 아래) */
+  angle: number;
+  /** 이동 중 여부 (false면 정지) */
+  isMoving: boolean;
   /** 클라이언트 타임스탬프 */
   timestamp: number;
 }

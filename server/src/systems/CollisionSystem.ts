@@ -2,7 +2,6 @@
  * 충돌 판정 시스템
  * 플레이어 간 충돌 감지 및 상성 판정을 처리합니다.
  */
-
 import {
   Player,
   CollisionResult,
@@ -119,7 +118,10 @@ export function processCollision(
     eliminatedId: loser.id,
     eliminatorId: winner.id,
     eliminatorNickname: winner.nickname,
+    eliminatorRpsState: winner.rpsState,
+    eliminatedRpsState: loser.rpsState,
     deathMessage: generateDeathMessage(winner.nickname),
+    killCount: 0, // CollisionSystem에서는 킬 수를 모름, GameRoom에서 설정
   };
 
   return {

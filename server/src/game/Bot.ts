@@ -81,9 +81,9 @@ export function makeBotDecision(
 ): BotDecision {
   // 감지 범위 내 플레이어 필터링 (무적 플레이어 제외)
   const playersInRange = nearbyPlayers.filter(
-    (p) => p.id !== bot.id && 
-           distance(bot.x, bot.y, p.x, p.y) <= config.detectionRange &&
-           !isPlayerInvincible(p)
+    (p) => p.id !== bot.id &&
+      distance(bot.x, bot.y, p.x, p.y) <= config.detectionRange &&
+      !isPlayerInvincible(p)
   );
 
   // 이길 수 있는 대상 (약한 대상) 찾기
@@ -163,7 +163,7 @@ export class BotEntity extends PlayerEntity {
     this.config = { ...DEFAULT_BOT_CONFIG, ...config };
     // 봇마다 다른 배회 패턴을 위해 랜덤 오프셋
     this.lastWanderChange = Date.now() - Math.random() * this.wanderChangeInterval;
-    
+
     // 초기 킬 수 부여 (0~5 랜덤) - 게임이 진행 중인 느낌을 주기 위함
     const initialKills = Math.floor(Math.random() * 6);
     for (let i = 0; i < initialKills; i++) {
@@ -184,7 +184,7 @@ export class BotEntity extends PlayerEntity {
 
     this.lastDecisionTime = currentTime;
     const newDecision = makeBotDecision(this.toJSON(), nearbyPlayers, this.config);
-    
+
     // idle 상태일 때 배회 방향 유지 (일정 시간마다 변경)
     if (newDecision.action === 'idle') {
       if (currentTime - this.lastWanderChange > this.wanderChangeInterval) {
@@ -275,9 +275,9 @@ const usedNicknames = new Set<string>();
 export function generateBotName(): string {
   // 사용 가능한 닉네임 찾기
   const availableNames = BOT_NICKNAMES.filter(name => !usedNicknames.has(name));
-  
+
   let nickname: string;
-  
+
   if (availableNames.length > 0) {
     // 사용 가능한 닉네임 중 랜덤 선택
     nickname = availableNames[Math.floor(Math.random() * availableNames.length)];
@@ -287,13 +287,15 @@ export function generateBotName(): string {
     const suffix = Math.floor(Math.random() * 1000);
     nickname = `${baseName}${suffix}`;
   }
-  
+
   usedNicknames.add(nickname);
-  
-  // 일정 시간 후 닉네임 해제 (재사용 가능하도록)
-  setTimeout(() => {
-    usedNicknames.delete(nickname);
-  }, 60000); // 1분 후 해제
-  
   return nickname;
+}
+
+/**
+ * 봇 닉네임을 해제합니다. (봇이 제거될 때 호출)
+ * @param nickname - 해제할 닉네임
+ */
+export function releaseBotName(nickname: string): void {
+  usedNicknames.delete(nickname);
 }
