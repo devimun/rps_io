@@ -24,6 +24,7 @@ import { MovementSystem, WorldBounds } from '../systems/MovementSystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { DashSystem, DashEvent } from '../systems/DashSystem';
 import { calculateRanking, RankingEntry } from '../systems/RankingSystem';
+import { spatialHashGrid } from '../systems/SpatialHashGrid';
 
 const WORLD_WIDTH = WORLD_SIZE;
 const WORLD_HEIGHT = WORLD_SIZE;
@@ -57,6 +58,8 @@ export class GameRoomEntity implements IGameRoom {
   private dashSystem: DashSystem;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private lastTickTime: number = 0;
+  private lastBroadcastTime: number = 0;
+  private readonly BROADCAST_INTERVAL = 50; // 20Hz 네트워크 동기화 (50ms)
   private lastRankingUpdate: number = 0;
   private readonly RANKING_UPDATE_INTERVAL = 1000; // 1초마다 랭킹 업데이트
   private onStateChange?: (state: GameStateUpdate) => void;
@@ -190,14 +193,20 @@ export class GameRoomEntity implements IGameRoom {
     const deltaTime = Math.min(actualDelta, 0.1); // 최대 100ms
     this.lastTickTime = now;
 
+    // 물리 연산 (60Hz)
     this.updateBotAI(now);
     this.updateDash();
     this.movementSystem.update(this.getPlayers(), deltaTime, (id) => this.dashSystem.getSpeedMultiplier(id));
     this.updateTransforms();
     this.checkCollisions();
-    this.maintainBotCount(); // 봇 수 유지
-    this.broadcastState();
-    this.updateRanking(now);
+    this.maintainBotCount();
+
+    // 네트워크 브로드캐스트 (20Hz - 50ms 간격)
+    if (now - this.lastBroadcastTime >= this.BROADCAST_INTERVAL) {
+      this.lastBroadcastTime = now;
+      this.broadcastState();
+      this.updateRanking(now);
+    }
   }
 
   /** 봇 수를 유지합니다 (20명 유지) */
@@ -270,18 +279,19 @@ export class GameRoomEntity implements IGameRoom {
   private checkCollisions(): void {
     const players = this.getPlayers();
     const toRemove: string[] = [];
-    for (let i = 0; i < players.length; i++) {
-      for (let j = i + 1; j < players.length; j++) {
-        const p1 = players[i], p2 = players[j];
-        if (toRemove.includes(p1.id) || toRemove.includes(p2.id)) continue;
 
-        if (!checkCollision(p1, p2)) continue;
+    // Spatial Hash Grid로 O(n) 충돌 검사
+    const potentialPairs = spatialHashGrid.getPotentialCollisionPairs(players);
 
-        const result = determineCollisionResult(p1.rpsState, p2.rpsState);
+    for (const [p1, p2] of potentialPairs) {
+      if (toRemove.includes(p1.id) || toRemove.includes(p2.id)) continue;
 
-        this.handleCollisionResult(p1, p2, result, toRemove);
-      }
+      if (!checkCollision(p1, p2)) continue;
+
+      const result = determineCollisionResult(p1.rpsState, p2.rpsState);
+      this.handleCollisionResult(p1 as PlayerEntity, p2 as PlayerEntity, result, toRemove);
     }
+
     for (const id of toRemove) { this.movementSystem.removeInput(id); this.players.delete(id); }
   }
 

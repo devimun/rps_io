@@ -32,7 +32,7 @@ export function calculateSizeFromKills(killCount: number): number {
   // 킬 16 → 크기 46
   const growthFactor = 4;
   const calculatedSize = DEFAULT_PLAYER_SIZE + Math.sqrt(killCount) * growthFactor;
-  
+
   // 최대 크기 제한 적용
   return Math.min(calculatedSize, MAX_PLAYER_SIZE);
 }
@@ -178,7 +178,7 @@ export class PlayerEntity implements IPlayer {
     // ID 덮어쓰기 (private 필드가 아니므로 가능)
     (player as { id: string }).id = data.id;
     player.rpsState = data.rpsState;
-    player.score = data.score;
+    // score는 getter로 항상 0 반환 (할당 불필요)
     player.size = data.size;
     player.velocityX = data.velocityX;
     player.velocityY = data.velocityY;
@@ -220,10 +220,10 @@ export function generateSafeSpawnPosition(
 ): { x: number; y: number } {
   const margin = SPAWN_EDGE_MARGIN;
   const safeDistance = 200; // 안전 거리
-  
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const pos = generateSpawnPosition(worldWidth, worldHeight, margin);
-    
+
     // 모든 기존 플레이어와의 거리 확인
     const isSafe = existingPlayers.every(player => {
       const dx = player.x - pos.x;
@@ -231,12 +231,12 @@ export function generateSafeSpawnPosition(
       const distance = Math.sqrt(dx * dx + dy * dy);
       return distance >= safeDistance;
     });
-    
+
     if (isSafe) {
       return pos;
     }
   }
-  
+
   // 안전한 위치를 찾지 못하면 랜덤 위치 반환
   return generateSpawnPosition(worldWidth, worldHeight, margin);
 }

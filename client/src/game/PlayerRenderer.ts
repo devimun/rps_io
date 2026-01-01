@@ -45,9 +45,29 @@ function getPlayerColorIndex(nickname: string): number {
  */
 export class PlayerRenderer {
   private scene: Phaser.Scene;
+  /** Container 재사용 풀 (Object Pooling) */
+  private containerPool: Phaser.GameObjects.Container[] = [];
+  private readonly MAX_POOL_SIZE = 30;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  /**
+   * Container를 풀에 반환 (재사용을 위해)
+   */
+  returnToPool(container: Phaser.GameObjects.Container): void {
+    if (this.containerPool.length < this.MAX_POOL_SIZE) {
+      // 초기화하고 풀에 반환
+      container.setVisible(false);
+      container.setPosition(0, 0);
+      container.setAlpha(1);
+      container.setScale(1);
+      this.containerPool.push(container);
+    } else {
+      // 풀이 가득 차면 파괴
+      container.destroy();
+    }
   }
 
   /**
@@ -140,6 +160,7 @@ export class PlayerRenderer {
     let targetY = player.y;
     let targetSize = player.size;
 
+    // 모든 플레이어에게 보간 적용
     if (hasBuffer(player.id)) {
       const interpolated = getInterpolatedPosition(player.id, Date.now());
       if (interpolated) {

@@ -261,7 +261,7 @@ export class MainScene extends Phaser.Scene {
     myPlayerId: string | null,
     isMobile: boolean
   ): void {
-    // 사라진 플레이어 제거
+    // 사라진 플레이어 제거 (Object Pool 사용)
     this.playerSprites.forEach((container, id) => {
       if (!players.has(id)) {
         this.tweens.add({
@@ -271,7 +271,7 @@ export class MainScene extends Phaser.Scene {
           alpha: 0,
           duration: 200,
           ease: 'Power2',
-          onComplete: () => container.destroy(),
+          onComplete: () => this.playerRenderer.returnToPool(container),
         });
         this.playerSprites.delete(id);
       }
