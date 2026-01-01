@@ -4,7 +4,7 @@
  */
 
 /** 현재 앱 버전 */
-export const APP_VERSION = '1.4.1';
+export const APP_VERSION = '1.4.2';
 
 /** 빌드 날짜 */
 export const BUILD_DATE = '2026-01-02';
@@ -19,6 +19,16 @@ export interface UpdateLog {
 
 /** 업데이트 히스토리 (최신순) */
 export const UPDATE_LOGS: UpdateLog[] = [
+  {
+    version: '1.4.2',
+    date: '2026-01-02',
+    title: { ko: '성능 최적화 ⚡', en: 'Performance Optimization ⚡' },
+    changes: [
+      { ko: '일부 PC에서 발생하던 렉 현상 개선', en: 'Fixed lag issues on some PCs' },
+      { ko: '변신 타이머가 더 부드럽게 작동', en: 'Transform timer now runs smoother' },
+      { ko: '전체적인 게임 반응 속도 향상', en: 'Overall game responsiveness improved' },
+    ],
+  },
   {
     version: '1.4.1',
     date: '2026-01-02',

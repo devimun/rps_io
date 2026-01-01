@@ -3,7 +3,7 @@
  * 플레이어가 제거되었을 때 표시되는 화면입니다.
  * 사망 애니메이션 후 표시됩니다.
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { useGameStore } from '../../stores/gameStore';
 import { useUIStore } from '../../stores/uiStore';
 import { t } from '../../utils/i18n';
@@ -33,17 +33,29 @@ const getRpsName = (state: RPSState | null, language: string): string => {
   return names[state]?.[language] || names[state]?.en || '???';
 };
 
-export function DeathScreen() {
-  const { 
-    eliminatorNickname, eliminatorRpsState, eliminatedRpsState, 
-    deathMessage, roomCode, nickname, isPrivateRoom, finalKillCount,
-    clearDeathInfo, setRoomInfo, setPhase, reset 
-  } = useGameStore();
-  const { language, setError, setLoading } = useUIStore();
+export const DeathScreen = memo(function DeathScreen() {
+  // selector 패턴: 각 상태 변경시에만 리렌더링
+  const eliminatorNickname = useGameStore((state) => state.eliminatorNickname);
+  const eliminatorRpsState = useGameStore((state) => state.eliminatorRpsState);
+  const eliminatedRpsState = useGameStore((state) => state.eliminatedRpsState);
+  const deathMessage = useGameStore((state) => state.deathMessage);
+  const roomCode = useGameStore((state) => state.roomCode);
+  const nickname = useGameStore((state) => state.nickname);
+  const isPrivateRoom = useGameStore((state) => state.isPrivateRoom);
+  const finalKillCount = useGameStore((state) => state.finalKillCount);
+  const clearDeathInfo = useGameStore((state) => state.clearDeathInfo);
+  const setRoomInfo = useGameStore((state) => state.setRoomInfo);
+  const setPhase = useGameStore((state) => state.setPhase);
+  const reset = useGameStore((state) => state.reset);
+
+  const language = useUIStore((state) => state.language);
+  const setError = useUIStore((state) => state.setError);
+  const setLoading = useUIStore((state) => state.setLoading);
+
   const [showScreen, setShowScreen] = useState(false);
   const [fadeIn, setFadeIn] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
-  
+
   // 게임 시작 시간 기록 (게임 종료 이벤트용)
   const gameStartTimeRef = useRef<number>(Date.now());
 
@@ -51,7 +63,7 @@ export function DeathScreen() {
     const timer = setTimeout(() => {
       setShowScreen(true);
       requestAnimationFrame(() => setFadeIn(true));
-      
+
       // 게임 종료 이벤트 트래킹
       const playTimeSeconds = Math.floor((Date.now() - gameStartTimeRef.current) / 1000);
       trackGameEnd({
@@ -83,17 +95,17 @@ export function DeathScreen() {
     if (isJoining || !nickname) return;
     setIsJoining(true);
     setLoading(true, t('common.loading', language));
-    
+
     // 현재 방 ID 저장 (직전 방 제외용)
     const currentRoomId = useGameStore.getState().roomId;
-    
+
     clearDeathInfo();
     trackPlayAgain();
     try {
       const response = await fetch(`${API_BASE_URL}/rooms/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           nickname,
           excludeRoomId: currentRoomId, // 직전 방 제외
         }),
@@ -121,13 +133,13 @@ export function DeathScreen() {
       <article className={`bg-slate-800 rounded-2xl p-8 max-w-sm w-full text-center 
         transform transition-all duration-500 ${fadeIn ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}`}>
         <h1 className="text-3xl font-bold text-red-400 mb-4">{t('death.title', language)}</h1>
-        
+
         {/* 킬 수 표시 */}
         <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-xl p-4 mb-4 border border-amber-500/30">
           <p className="text-amber-400 text-sm mb-1">{language === 'ko' ? '이번 게임 킬 수' : 'Kills This Game'}</p>
           <p className="text-4xl font-bold text-white">{finalKillCount}</p>
         </div>
-        
+
         <div className="bg-slate-900/50 rounded-xl p-4 mb-4">
           <div className="flex items-center justify-center gap-4">
             <div className="flex flex-col items-center">
@@ -167,7 +179,7 @@ export function DeathScreen() {
       </article>
     </div>
   );
-}
+});
 
 function ShareIcon() {
   return (
@@ -177,3 +189,4 @@ function ShareIcon() {
     </svg>
   );
 }
+

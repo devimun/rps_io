@@ -2,7 +2,7 @@
  * 로비 화면 컴포넌트
  * 게임 시작 전 방 생성/입장 UI를 제공합니다.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { useGameStore } from '../../stores/gameStore';
 import { t } from '../../utils/i18n';
@@ -21,9 +21,16 @@ interface LobbyProps {
 /**
  * 로비 컴포넌트
  */
-export function Lobby({ initialRoomCode }: LobbyProps) {
-  const { language, savedNickname, setSavedNickname, setLoading, setError } = useUIStore();
-  const { setRoomInfo, setPhase } = useGameStore();
+export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
+  const language = useUIStore((state) => state.language);
+  const savedNickname = useUIStore((state) => state.savedNickname);
+  const setSavedNickname = useUIStore((state) => state.setSavedNickname);
+  const setLoading = useUIStore((state) => state.setLoading);
+  const setError = useUIStore((state) => state.setError);
+
+  // selector 패턴: 각 상태 변경시에만 리렌더링
+  const setRoomInfo = useGameStore((state) => state.setRoomInfo);
+  const setPhase = useGameStore((state) => state.setPhase);
 
   const [nickname, setNickname] = useState(savedNickname);
   const [roomCode, setRoomCode] = useState('');
@@ -202,7 +209,7 @@ export function Lobby({ initialRoomCode }: LobbyProps) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 rounded-xl p-6 w-full max-w-sm">
             <h2 className="text-xl font-bold text-white mb-4">{t('lobby.createRoom', language)}</h2>
-            
+
             <label className="flex items-center gap-3 text-slate-300 mb-6">
               <input
                 type="checkbox"
@@ -236,7 +243,7 @@ export function Lobby({ initialRoomCode }: LobbyProps) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 rounded-xl p-6 w-full max-w-sm">
             <h2 className="text-xl font-bold text-white mb-4">{t('lobby.joinRoom', language)}</h2>
-            
+
             <input
               type="text"
               value={roomCode}
@@ -272,4 +279,5 @@ export function Lobby({ initialRoomCode }: LobbyProps) {
       </footer>
     </main>
   );
-}
+});
+

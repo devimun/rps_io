@@ -2,15 +2,16 @@
  * 변신 예고 컴포넌트
  * 변신 0.5초 전에 화면에 경고를 표시합니다.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import { useGameStore } from '../../stores/gameStore';
 
 /**
  * 변신 예고 컴포넌트
  * 화면 중앙 상단에 변신 예고 애니메이션을 표시합니다.
  */
-export function TransformWarning() {
-  const { transformWarningTime } = useGameStore();
+export const TransformWarning = memo(function TransformWarning() {
+  // selector 패턴: transformWarningTime 변경시에만 리렌더링
+  const transformWarningTime = useGameStore((state) => state.transformWarningTime);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -36,4 +37,5 @@ export function TransformWarning() {
       </div>
     </div>
   );
-}
+});
+
