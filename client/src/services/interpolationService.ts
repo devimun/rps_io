@@ -45,6 +45,16 @@ export function addSnapshot(playerId: string, player: Player, timestamp: number)
         playerBuffers.set(playerId, buffer);
     }
 
+    // 첫 스냅샷일 때 가상 이전 스냅샷 추가 (초기 렉 방지)
+    if (buffer.length === 0) {
+        buffer.push({
+            x: player.x,
+            y: player.y,
+            size: player.size,
+            timestamp: timestamp - 50, // 50ms 전 가상 스냅샷
+        });
+    }
+
     // 스냅샷 추가
     buffer.push({
         x: player.x,
