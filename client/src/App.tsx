@@ -21,6 +21,7 @@ import { detectDevice } from './utils/deviceDetector';
 import { extractRoomCode } from './utils/shareUtils';
 import { initAnalytics } from './services/analytics';
 import { FeedbackModal } from './components/ui/FeedbackButton';
+import { GameLoadingScreen } from './components/ui/GameLoadingScreen';
 
 /**
  * 메인 앱 컴포넌트
@@ -72,30 +73,46 @@ function App() {
       {/* 메인 콘텐츠 */}
       {phase === 'idle' && <Lobby initialRoomCode={initialRoomCode} />}
 
-      {(phase === 'playing' || phase === 'dead') && (
-        <div className="relative w-full h-screen">
-          <GameCanvas />
-          <TransformTimer />
-          <InviteButtons />
-          {/* 모바일: 랭킹 + 미니맵, PC: 전체 UI */}
-          {isMobile ? (
-            <>
-              <MobileRanking />
-              <Minimap />
-            </>
-          ) : (
-            <>
-              <Ranking />
-              <Minimap />
-              <KillFeed />
-            </>
-          )}
-          <FullscreenButton />
-        </div>
-      )}
+      {/* GameCanvas: 로비에서부터 미리 마운트하여 Phaser 사전 초기화 (렉 방지) */}
+      {/* visibility:hidden으로 숨기면 Phaser가 정상 초기화됨 (display:none은 불가) */}
+      <div
+        className="w-full h-screen"
+        style={{
+          visibility: phase === 'idle' ? 'hidden' : 'visible',
+          position: phase === 'idle' ? 'absolute' : 'relative',
+          top: 0,
+          left: 0,
+          zIndex: phase === 'idle' ? -1 : 1,
+        }}
+      >
+        <GameCanvas />
+        {(phase === 'playing' || phase === 'dead') && (
+          <>
+            <TransformTimer />
+            <InviteButtons />
+            {/* 모바일: 랭킹 + 미니맵, PC: 전체 UI */}
+            {isMobile ? (
+              <>
+                <MobileRanking />
+                <Minimap />
+              </>
+            ) : (
+              <>
+                <Ranking />
+                <Minimap />
+                <KillFeed />
+              </>
+            )}
+            <FullscreenButton />
+          </>
+        )}
+      </div>
 
       {/* 사망 화면 */}
       {phase === 'dead' && <DeathScreen />}
+
+      {/* 게임 로딩 화면 (서버 연결 중) */}
+      {phase === 'playing' && <GameLoadingScreen />}
 
       {/* 튜토리얼 (첫 플레이 시) */}
       {phase === 'playing' && showTutorial && !tutorialDismissed && <Tutorial />}
