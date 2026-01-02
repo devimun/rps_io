@@ -12,28 +12,26 @@ let pool: Pool | null = null;
 
 /**
  * DB 연결 풀 가져오기 (싱글톤)
+ * @throws DATABASE_URL이 없으면 에러 throw
  */
 export function getPool(): Pool {
     if (!pool) {
         if (!DATABASE_URL) {
             console.warn('[Database] DATABASE_URL not set - Database features disabled');
-            // 개발 환경에서는 더미 풀 반환
-            pool = new Pool({
-                max: 0,
-            });
-        } else {
-            pool = new Pool({
-                connectionString: DATABASE_URL,
-                ssl: {
-                    rejectUnauthorized: false, // Railway SSL 설정
-                },
-                max: 10,
-                idleTimeoutMillis: 30000,
-                connectionTimeoutMillis: 2000,
-            });
-
-            console.log('[Database] PostgreSQL connection pool created');
+            throw new Error('Database not configured');
         }
+
+        pool = new Pool({
+            connectionString: DATABASE_URL,
+            ssl: {
+                rejectUnauthorized: false, // Railway SSL 설정
+            },
+            max: 10,
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 2000,
+        });
+
+        console.log('[Database] PostgreSQL connection pool created');
     }
 
     return pool;

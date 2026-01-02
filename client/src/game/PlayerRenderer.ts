@@ -160,7 +160,6 @@ export class PlayerRenderer {
     _isMobile: boolean
   ): void {
     // Entity Interpolation: 버퍼에서 보간된 위치 가져오기
-    // interpolationService가 100ms 과거 상태를 부드럽게 보간하므로 추가 lerp 불필요
     let targetX = player.x;
     let targetY = player.y;
     let targetSize = player.size;
@@ -175,12 +174,16 @@ export class PlayerRenderer {
       }
     }
 
-    // 위치 직접 적용 (interpolationService가 이미 보간 처리)
-    container.x = targetX;
-    container.y = targetY;
+    // 스무딩 적용 (부드러움 유지하면서 반응성 개선)
+    // 빠른 lerp (0.5) - 충돌 판정과 거의 일치하면서 부드러움 유지
+    const smoothFactor = 0.5;
+    container.x = Phaser.Math.Linear(container.x, targetX, smoothFactor);
+    container.y = Phaser.Math.Linear(container.y, targetY, smoothFactor);
 
-    // 크기도 직접 적용 (서버 충돌 범위와 일치시킴)
-    container.setData('currentSize', targetSize);
+    // 크기도 스무딩 적용 (충돌 판정 일치 + 부드러움)
+    const currentSize = container.getData('currentSize') as number || targetSize;
+    const smoothedSize = Phaser.Math.Linear(currentSize, targetSize, smoothFactor);
+    container.setData('currentSize', smoothedSize);
 
     const playerColor = container.getData('playerColor') as number;
     const rpsColor = RPS_COLORS[player.rpsState];
@@ -191,7 +194,7 @@ export class PlayerRenderer {
     // 상태 변경 감지 (불필요한 재렌더링 방지)
     const lastRpsState = container.getData('lastRpsState') as string | undefined;
     const lastSizeRounded = container.getData('lastSizeRounded') as number | undefined;
-    const sizeRounded = Math.round(targetSize);
+    const sizeRounded = Math.round(smoothedSize);
     const stateChanged = lastRpsState !== player.rpsState || lastSizeRounded !== sizeRounded;
 
     if (stateChanged) {
@@ -199,22 +202,22 @@ export class PlayerRenderer {
       container.setData('lastSizeRounded', sizeRounded);
 
       // 본체 그리기 (상태 변경 시에만)
-      this.drawBody(container, targetSize, playerColor, rpsColor, isMe);
+      this.drawBody(container, smoothedSize, playerColor, rpsColor, isMe);
 
       // 눈 그리기 (항상 표시 - 캐릭터 정체성)
-      this.drawEyes(container, targetSize);
+      this.drawEyes(container, smoothedSize);
     }
 
     // 텍스트 업데이트 (상태 변경 시에만)
     if (stateChanged) {
       const emojiText = container.getData('emojiText') as Phaser.GameObjects.Text;
-      const emojiSize = Math.max(28, Math.min(48, targetSize * 0.6)); // 28px ~ 48px
+      const emojiSize = Math.max(28, Math.min(48, smoothedSize * 0.6)); // 28px ~ 48px
       emojiText.setText(RPS_EMOJI[player.rpsState]);
       emojiText.setFontSize(emojiSize);
-      emojiText.setY(-targetSize - 20); // 간격 증가로 겹침 방지
+      emojiText.setY(-smoothedSize - 20); // 간격 증가로 겹침 방지
 
       const nameText = container.getData('nameText') as Phaser.GameObjects.Text;
-      nameText.setY(-targetSize - 45); // 이모지와 더 멀리
+      nameText.setY(-smoothedSize - 45); // 이모지와 더 멀리
     }
 
     // 1등 왕관 업데이트
@@ -229,7 +232,7 @@ export class PlayerRenderer {
 
       if (isFirstPlace) {
         crownText.setVisible(true);
-        crownText.setY(-targetSize - 65); // 더 위로
+        crownText.setY(-smoothedSize - 65); // 더 위로
         // 1등 닉네임 금색 배경
         nameText.setBackgroundColor('#d4a017');
         nameText.setPadding(4, 2, 4, 2);
@@ -241,12 +244,12 @@ export class PlayerRenderer {
     } else if (isFirstPlace) {
       // 위치 업데이트
       const crownText = container.getData('crownText') as Phaser.GameObjects.Text;
-      crownText.setY(-targetSize - 65); // 더 위로
+      crownText.setY(-smoothedSize - 65); // 더 위로
     }
 
     // 대시바 업데이트 (내 플레이어만)
     if (isMe) {
-      this.drawDashBar(container, targetSize);
+      this.drawDashBar(container, smoothedSize);
     }
   }
 
