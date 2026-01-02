@@ -16,7 +16,7 @@ export type InAppBrowserType =
   | null;
 
 /** 저성능 브라우저 타입 */
-export type SlowBrowserType = 'samsung' | 'ucbrowser' | 'opera-mini' | null;
+export type SlowBrowserType = 'ucbrowser' | 'opera-mini' | null;
 
 /** 기기 타입 */
 export type DeviceType = 'mobile' | 'tablet' | 'desktop';
@@ -157,8 +157,6 @@ export function detectDeviceType(userAgent?: string): DeviceType {
 export function detectSlowBrowser(userAgent?: string): SlowBrowserType {
   const ua = userAgent ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '');
 
-  // 삼성 인터넷 브라우저
-  if (/SamsungBrowser/i.test(ua)) return 'samsung';
   // UC 브라우저
   if (/UCBrowser/i.test(ua)) return 'ucbrowser';
   // Opera Mini

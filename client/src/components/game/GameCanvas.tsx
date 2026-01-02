@@ -8,7 +8,7 @@ import { getGameConfig } from '../../game/config';
 import { useUIStore } from '../../stores/uiStore';
 import { useGameStore } from '../../stores/gameStore';
 import { socketService } from '../../services/socketService';
-import { trackGameStart } from '../../services/analytics';
+import { trackGameStart, trackSessionEnd, trackError, trackLoadingTime } from '../../services/analytics';
 
 /** 서버 URL */
 const SERVER_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3001';
@@ -31,13 +31,27 @@ export const GameCanvas = memo(function GameCanvas() {
   useEffect(() => {
     if (gameRef.current || !containerRef.current) return;
 
-    const config = getGameConfig(isMobile);
-    gameRef.current = new Phaser.Game({
-      ...config,
-      parent: containerRef.current,
-    });
+    try {
+      const loadStart = Date.now();
+
+      const config = getGameConfig(isMobile);
+      gameRef.current = new Phaser.Game({
+        ...config,
+        parent: containerRef.current,
+      });
+
+      // 로딩 시간 측정
+      trackLoadingTime(Date.now() - loadStart, 'initial');
+    } catch (error) {
+      console.error('[GameCanvas] Failed to initialize:', error);
+      if (error instanceof Error) {
+        trackError(error, 'game_init');
+      }
+    }
 
     return () => {
+      trackSessionEnd(); // duration 파라미터 제거
+
       if (gameRef.current) {
         gameRef.current.destroy(true);
         gameRef.current = null;

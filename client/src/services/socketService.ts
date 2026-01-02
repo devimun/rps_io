@@ -16,6 +16,10 @@ import type {
   DashEvent,
   KillFeedEvent,
 } from '@chaos-rps/shared';
+import {
+  trackDisconnect,
+  trackError
+} from './analytics';
 
 /** 타입이 지정된 Socket 인스턴스 */
 type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -106,12 +110,14 @@ class SocketService {
     // 연결 해제 이벤트
     this.socket.on('disconnect', (reason) => {
       this.callbacks.onDisconnect?.(reason);
+      trackDisconnect(reason, reason === 'io client disconnect');
     });
 
     // 연결 에러 이벤트
     this.socket.on('connect_error', (error) => {
       this.reconnectAttempts++;
       this.callbacks.onError?.(error);
+      trackError(error, 'socket_connect_error');
     });
 
     // 게임 상태 업데이트

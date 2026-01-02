@@ -11,7 +11,9 @@ import { RoomManager } from './managers/RoomManager';
 import { MatchManager } from './managers/MatchManager';
 import { GameRoomEntity } from './game/GameRoom';
 import { registerLobbyRoutes } from './routes/lobby';
+import feedbackRoute from './routes/feedback';
 import { StatsService } from './services/StatsService';
+import { initDatabase, closeDatabase } from './services/database';
 import type { ClientToServerEvents, ServerToClientEvents } from '@chaos-rps/shared';
 
 /** 서버 설정 */
@@ -94,8 +96,12 @@ async function start(): Promise<void> {
     // 미들웨어 설정
     await setupCors();
 
+    // 데이터베이스 초기화 (테이블 생성)
+    await initDatabase();
+
     // 라우트 설정
     setupHealthCheck();
+    await fastify.register(feedbackRoute, { prefix: '/api' });
     registerLobbyRoutes(fastify, roomManager, matchManager);
 
     // Fastify 서버 시작
@@ -258,6 +264,15 @@ async function start(): Promise<void> {
         console.log(`🧹 빈 방 ${cleaned}개 정리됨 (현재 ${roomManager.getRoomCount()}개 방)`);
       }
     }, 30000);
+
+    // 종료 시 정리
+    const shutdown = async () => {
+      await closeDatabase();
+      process.exit(0);
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
 
   } catch (err) {
     fastify.log.error(err);

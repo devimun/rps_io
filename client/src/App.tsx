@@ -11,7 +11,6 @@ import { Ranking } from './components/ui/Ranking';
 import { DeathScreen } from './components/ui/DeathScreen';
 import { Tutorial } from './components/ui/Tutorial';
 import { InAppWarning } from './components/ui/InAppWarning';
-import { SlowBrowserWarning } from './components/ui/SlowBrowserWarning';
 import { Minimap } from './components/ui/Minimap';
 import { KillFeed } from './components/ui/KillFeed';
 import { MobileRanking } from './components/ui/MobileRanking';
@@ -19,9 +18,9 @@ import { FullscreenButton } from './components/ui/FullscreenButton';
 import { TransformTimer } from './components/ui/TransformTimer';
 import { InviteButtons } from './components/ui/InviteButtons';
 import { detectDevice } from './utils/deviceDetector';
-import type { SlowBrowserType } from './utils/deviceDetector';
 import { extractRoomCode } from './utils/shareUtils';
 import { initAnalytics } from './services/analytics';
+import { FeedbackModal } from './components/ui/FeedbackButton';
 
 /**
  * 메인 앱 컴포넌트
@@ -39,8 +38,6 @@ function App() {
 
   /** URL에서 추출한 방 코드 (다이렉트 입장용) */
   const [initialRoomCode, setInitialRoomCode] = useState<string | null>(null);
-  /** 저성능 브라우저 타입 */
-  const [slowBrowserType, setSlowBrowserType] = useState<SlowBrowserType>(null);
 
   // 초기화: 기기 감지, URL 파라미터 처리, 분석 초기화
   useEffect(() => {
@@ -54,14 +51,9 @@ function App() {
       setIsMobile(true);
     }
 
-    // 인앱 브라우저 감지
-    if (deviceInfo.isInAppBrowser) {
+    // 인앱 브라우저 또는 저성능 브라우저 감지
+    if (deviceInfo.isInAppBrowser || deviceInfo.isSlowBrowser) {
       setIsInAppBrowser(true);
-    }
-
-    // 저성능 브라우저 감지 (모바일에서만)
-    if (deviceInfo.isMobile && deviceInfo.isSlowBrowser) {
-      setSlowBrowserType(deviceInfo.slowBrowserType);
     }
 
     // URL에서 방 코드 추출 (다이렉트 입장)
@@ -74,13 +66,8 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
-      {/* 인앱 브라우저 경고 */}
+      {/* 브라우저 경고 (인앱/저성능 브라우저) */}
       {isInAppBrowser && <InAppWarning />}
-
-      {/* 저성능 브라우저 경고 */}
-      {!isInAppBrowser && slowBrowserType && (
-        <SlowBrowserWarning browserType={slowBrowserType} />
-      )}
 
       {/* 메인 콘텐츠 */}
       {phase === 'idle' && <Lobby initialRoomCode={initialRoomCode} />}
@@ -112,6 +99,9 @@ function App() {
 
       {/* 튜토리얼 (첫 플레이 시) */}
       {phase === 'playing' && showTutorial && !tutorialDismissed && <Tutorial />}
+
+      {/* 피드백 모달 (메인 화면에서만 표시) */}
+      {phase === 'idle' && <FeedbackModal />}
     </div>
   );
 }

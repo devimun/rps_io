@@ -78,7 +78,8 @@ export const DeathScreen = memo(function DeathScreen() {
 
   const handleShare = async () => {
     const metadata = createShareMetadata(roomCode ?? undefined);
-    trackShare('link');
+    const shareType = isWebShareSupported() ? 'native' : 'copy';
+    trackShare('link', shareType);
     if (isWebShareSupported()) {
       await shareViaWebAPI(metadata);
     } else {
@@ -96,24 +97,40 @@ export const DeathScreen = memo(function DeathScreen() {
     setIsJoining(true);
     setLoading(true, t('common.loading', language));
 
-    // 현재 방 ID 저장 (직전 방 제외용)
-    const currentRoomId = useGameStore.getState().roomId;
-
     clearDeathInfo();
-    trackPlayAgain();
+    trackPlayAgain(isPrivateRoom && roomCode ? 'same' : 'new');
+
     try {
-      const response = await fetch(`${API_BASE_URL}/rooms/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nickname,
-          excludeRoomId: currentRoomId, // 직전 방 제외
-        }),
-      });
-      if (!response.ok) throw new Error('Failed to join');
-      const data = await response.json();
-      setRoomInfo(data.roomId, data.code || '', data.playerId, nickname);
-      setPhase('playing');
+      if (isPrivateRoom && roomCode) {
+        // 사설방: 같은 방으로 재입장
+        const response = await fetch(`${API_BASE_URL}/rooms/join`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nickname,
+            code: roomCode, // 기존 방 코드 사용
+          }),
+        });
+        if (!response.ok) throw new Error('Failed to rejoin');
+        const data = await response.json();
+        setRoomInfo(data.roomId, roomCode, data.playerId, nickname, true);
+        setPhase('playing');
+      } else {
+        // 공개방: 새로운 방 매칭
+        const currentRoomId = useGameStore.getState().roomId;
+        const response = await fetch(`${API_BASE_URL}/rooms/join`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nickname,
+            excludeRoomId: currentRoomId, // 직전 방 제외
+          }),
+        });
+        if (!response.ok) throw new Error('Failed to join');
+        const data = await response.json();
+        setRoomInfo(data.roomId, data.code || '', data.playerId, nickname);
+        setPhase('playing');
+      }
     } catch {
       setError(t('error.connectionFailed', language));
       reset();

@@ -81,6 +81,9 @@ export class PreloadScene extends Phaser.Scene {
     // 실제 에셋이 없으므로 프로시저럴 그래픽 사용
     this.createProceduralAssets();
 
+    // 그리드 타일 텍스처 생성 (PC 최적화)
+    this.createGridTile();
+
     // 로딩 완료 처리 (에셋이 없으므로 즉시 완료)
     this.load.start();
   }
@@ -117,6 +120,44 @@ export class PreloadScene extends Phaser.Scene {
 
     // 텍스처로 변환
     graphics.generateTexture(key, size, size);
+    graphics.destroy();
+  }
+
+  /**
+   * 그리드 타일 텍스처 생성 (PC 최적화)
+   * 512x512 타일을 한 번만 생성하여 TileSprite로 반복 사용
+   */
+  private createGridTile(): void {
+    const tileSize = 512;
+    const gridSize = 100;
+    const graphics = this.add.graphics();
+
+    // 배경 (투명)
+    graphics.fillStyle(0x000000, 0);
+    graphics.fillRect(0, 0, tileSize, tileSize);
+
+    // 점 패턴 (100px 간격)
+    graphics.fillStyle(0x2a3a5e, 1);
+    for (let x = 0; x <= tileSize; x += gridSize) {
+      for (let y = 0; y <= tileSize; y += gridSize) {
+        graphics.fillCircle(x, y, 4);
+      }
+    }
+
+    // 작은 그리드 선 (100px 간격)
+    graphics.lineStyle(1, 0x1e2d4a, 0.5);
+    for (let x = 0; x <= tileSize; x += gridSize) {
+      graphics.moveTo(x, 0);
+      graphics.lineTo(x, tileSize);
+    }
+    for (let y = 0; y <= tileSize; y += gridSize) {
+      graphics.moveTo(0, y);
+      graphics.lineTo(tileSize, y);
+    }
+    graphics.strokePath();
+
+    // 텍스처로 저장
+    graphics.generateTexture('grid-tile', tileSize, tileSize);
     graphics.destroy();
   }
 

@@ -4,10 +4,10 @@
  */
 
 /** 현재 앱 버전 */
-export const APP_VERSION = '1.4.2';
+export const APP_VERSION = '1.4.3';
 
 /** 빌드 날짜 */
-export const BUILD_DATE = '2026-01-02';
+export const BUILD_DATE = '2026-01-03';
 
 /** 업데이트 로그 타입 */
 export interface UpdateLog {
@@ -19,6 +19,19 @@ export interface UpdateLog {
 
 /** 업데이트 히스토리 (최신순) */
 export const UPDATE_LOGS: UpdateLog[] = [
+  {
+    version: '1.4.3',
+    date: '2026-01-03',
+    title: { ko: '피드백 & 최적화 업데이트 💬', en: 'Feedback & Optimization Update 💬' },
+    changes: [
+      { ko: '인게임 피드백 기능 추가 🗣️', en: 'In-game feedback feature added 🗣️' },
+      { ko: '충돌 판정과 캐릭터 크기 일치 수정 🎯', en: 'Fixed collision hitbox matching visual size 🎯' },
+      { ko: '플레이어 움직임이 더 반응적으로 개선', en: 'Player movement feels more responsive' },
+      { ko: '게임 시작 시 초기 렉 현상 해결', en: 'Fixed initial lag when starting game' },
+      { ko: 'RPS 이모지가 더 크고 잘 보이게 개선', en: 'RPS emoji now larger and more visible' },
+      { ko: '사설방에서 다시하기 시 같은 방 재입장', en: 'Play Again in private rooms rejoins same room' },
+    ],
+  },
   {
     version: '1.4.2',
     date: '2026-01-02',

@@ -7,7 +7,16 @@ import { useUIStore } from '../../stores/uiStore';
 import { useGameStore } from '../../stores/gameStore';
 import { t } from '../../utils/i18n';
 import { VersionInfo } from './VersionInfo';
+
 import { SupportButton } from './SupportButton';
+import {
+  trackLobbyEnter,
+  trackRoomCreateAttempt,
+  trackRoomCreateSuccess,
+  trackRoomJoinAttempt,
+  trackRoomJoinSuccess,
+  trackError
+} from '../../services/analytics';
 
 /** API 기본 URL */
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -40,6 +49,8 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
 
   /** URL에서 방 코드가 있으면 자동으로 코드 입장 모달 열기 */
   useEffect(() => {
+    trackLobbyEnter(); // 로비 진입 추적
+
     if (initialRoomCode) {
       setRoomCode(initialRoomCode);
       setShowJoinModal(true);
@@ -58,6 +69,7 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
 
     setLoading(true, t('common.loading', language));
     setSavedNickname(nickname);
+    trackRoomJoinAttempt('quick');
 
     try {
       const response = await fetch(`${API_BASE_URL}/rooms/join`, {
@@ -69,10 +81,12 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
       if (!response.ok) throw new Error('Failed to join');
 
       const data = await response.json();
+      trackRoomJoinSuccess('public');
       setRoomInfo(data.roomId, data.code || '', data.playerId, nickname);
       setPhase('playing');
-    } catch {
+    } catch (error) {
       setError(t('error.connectionFailed', language));
+      if (error instanceof Error) trackError(error, 'quick_join');
     } finally {
       setLoading(false);
     }
@@ -87,7 +101,7 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
 
     setLoading(true, t('common.loading', language));
     setSavedNickname(nickname);
-
+    trackRoomCreateAttempt(fillWithBots);
     try {
       const response = await fetch(`${API_BASE_URL}/rooms`, {
         method: 'POST',
@@ -98,10 +112,21 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
       if (!response.ok) throw new Error('Failed to create');
 
       const data = await response.json();
+
+      // URL에 방 코드 추가 (브라우저 히스토리 업데이트)
+      const url = new URL(window.location.href);
+      url.searchParams.set('code', data.code);
+      window.history.replaceState({}, '', url.toString());
+
       setRoomInfo(data.roomId, data.code, data.playerId, nickname, true); // 사설방
+
+      // GA4: 방 생성 성공 추적
+      trackRoomCreateSuccess('private', data.code);
+
       setPhase('playing');
-    } catch {
+    } catch (error) {
       setError(t('error.connectionFailed', language));
+      if (error instanceof Error) trackError(error, 'create_room');
     } finally {
       setLoading(false);
       setShowCreateModal(false);
@@ -136,6 +161,12 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
       }
 
       const data = await response.json();
+
+      // URL에 방 코드 추가 (브라우저 히스토리 업데이트)
+      const url = new URL(window.location.href);
+      url.searchParams.set('code', roomCode.toUpperCase());
+      window.history.replaceState({}, '', url.toString());
+
       setRoomInfo(data.roomId, roomCode.toUpperCase(), data.playerId, nickname, true); // 사설방 (코드 입장)
       setPhase('playing');
     } catch (err) {
@@ -222,7 +253,15 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => {
+                  setShowCreateModal(false);
+                  // URL에서 code 파라미터 제거
+                  const url = new URL(window.location.href);
+                  if (url.searchParams.has('code')) {
+                    url.searchParams.delete('code');
+                    window.history.replaceState({}, '', url.toString());
+                  }
+                }}
                 className="flex-1 py-2 rounded-lg bg-slate-700 text-white"
               >
                 {t('common.cancel', language)}
@@ -257,7 +296,15 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setShowJoinModal(false)}
+                onClick={() => {
+                  setShowJoinModal(false);
+                  // URL에서 code 파라미터 제거
+                  const url = new URL(window.location.href);
+                  if (url.searchParams.has('code')) {
+                    url.searchParams.delete('code');
+                    window.history.replaceState({}, '', url.toString());
+                  }
+                }}
                 className="flex-1 py-2 rounded-lg bg-slate-700 text-white"
               >
                 {t('common.cancel', language)}

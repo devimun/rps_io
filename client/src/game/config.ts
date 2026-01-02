@@ -30,6 +30,9 @@ export const GAME_CONFIG: Phaser.Types.Core.GameConfig = {
     antialias: true,
     pixelArt: false,
     roundPixels: true,
+    powerPreference: 'high-performance', // GPU 고성능 모드 활성화
+    batchSize: 2048, // 배치 크기 증가 (기본 2000)
+    maxTextures: 16, // 텍스처 유닛 최대 활용
   },
   audio: {
     disableWebAudio: false,
@@ -45,10 +48,10 @@ export const GAME_CONFIG: Phaser.Types.Core.GameConfig = {
 
 /** 모바일 최적화 설정 */
 export const MOBILE_CONFIG: Partial<Phaser.Types.Core.GameConfig> = {
-  type: Phaser.CANVAS, // Canvas 강제 (모바일 호환성)
+  type: Phaser.AUTO, // WebGL 시도, Canvas 폴백
   render: {
-    antialias: false,
-    pixelArt: true,
+    antialias: true,  // 안티앨리어싱 활성화 (부드러운 렌더링)
+    pixelArt: false,  // 원형 유지
     roundPixels: true,
   },
   fps: {

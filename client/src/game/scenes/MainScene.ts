@@ -12,6 +12,7 @@ import type { Player } from '@chaos-rps/shared';
 import { WORLD_SIZE } from '@chaos-rps/shared';
 import { PlayerRenderer } from '../PlayerRenderer';
 
+
 /** 게임 월드 크기 */
 const WORLD_CONFIG = { WIDTH: WORLD_SIZE, HEIGHT: WORLD_SIZE };
 
@@ -39,6 +40,7 @@ function tryDash(): void {
   if (now - lastDashRequestTime < DASH_REQUEST_THROTTLE) return;
 
   if (canDash()) {
+    lastDashRequestTime = now;
     lastDashRequestTime = now;
     socketService.sendDash();
   }
@@ -87,54 +89,57 @@ export class MainScene extends Phaser.Scene {
 
   /**
    * 그리드 배경 및 월드 경계선 생성
+   * PC: TileSprite로 캐시된 텍스처 사용 (성능 최적화)
+   * Mobile: 단순화된 그리드
    */
   private createGrid(): void {
-    const graphics = this.add.graphics();
     const isMobile = useUIStore.getState().isMobile;
-    const gridSize = isMobile ? 200 : 100;
 
-    // 점 패턴 배경 (모바일에서는 간소화)
-    if (!isMobile) {
-      graphics.fillStyle(0x2a3a5e, 1);
-      for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += gridSize) {
-        for (let y = 0; y <= WORLD_CONFIG.HEIGHT; y += gridSize) {
-          graphics.fillCircle(x, y, 4);
-        }
-      }
-    }
+    if (isMobile) {
+      // 모바일: 단순화된 그리드 (기존 방식)
+      const graphics = this.add.graphics();
 
-    // 큰 그리드 선 (500px 간격)
-    graphics.lineStyle(2, 0x2a3a5e, 0.8);
-    for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += 500) {
-      graphics.moveTo(x, 0);
-      graphics.lineTo(x, WORLD_CONFIG.HEIGHT);
-    }
-    for (let y = 0; y <= WORLD_CONFIG.HEIGHT; y += 500) {
-      graphics.moveTo(0, y);
-      graphics.lineTo(WORLD_CONFIG.WIDTH, y);
-    }
-    graphics.strokePath();
-
-    // 작은 그리드 선 (모바일에서는 생략)
-    if (!isMobile) {
-      graphics.lineStyle(1, 0x1e2d4a, 0.5);
-      for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += gridSize) {
+      // 큰 그리드 선만 (500px 간격)
+      graphics.lineStyle(2, 0x2a3a5e, 0.8);
+      for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += 500) {
         graphics.moveTo(x, 0);
         graphics.lineTo(x, WORLD_CONFIG.HEIGHT);
       }
-      for (let y = 0; y <= WORLD_CONFIG.HEIGHT; y += gridSize) {
+      for (let y = 0; y <= WORLD_CONFIG.HEIGHT; y += 500) {
         graphics.moveTo(0, y);
         graphics.lineTo(WORLD_CONFIG.WIDTH, y);
       }
       graphics.strokePath();
+    } else {
+      // PC: TileSprite로 그리드 패턴 반복 (최적화)
+      this.add.tileSprite(
+        WORLD_CONFIG.WIDTH / 2,
+        WORLD_CONFIG.HEIGHT / 2,
+        WORLD_CONFIG.WIDTH,
+        WORLD_CONFIG.HEIGHT,
+        'grid-tile'
+      ).setDepth(-10); // 배경 레이어
+
+      // 큰 그리드 선 (500px 간격) - 시각적 강조
+      const bigGrid = this.add.graphics();
+      bigGrid.lineStyle(2, 0x2a3a5e, 0.8);
+      for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += 500) {
+        bigGrid.moveTo(x, 0);
+        bigGrid.lineTo(x, WORLD_CONFIG.HEIGHT);
+      }
+      for (let y = 0; y <= WORLD_CONFIG.HEIGHT; y += 500) {
+        bigGrid.moveTo(0, y);
+        bigGrid.lineTo(WORLD_CONFIG.WIDTH, y);
+      }
+      bigGrid.strokePath();
     }
 
-    // 월드 경계선
+    // 월드 경계선 (공통)
     const border = this.add.graphics();
     border.lineStyle(8, 0xff4444, 1);
     border.strokeRect(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
 
-    // 경계 경고 영역 (모바일에서는 생략)
+    // 경계 경고 영역 (PC만)
     if (!isMobile) {
       const warningZone = this.add.graphics();
       warningZone.fillStyle(0xff0000, 0.1);
