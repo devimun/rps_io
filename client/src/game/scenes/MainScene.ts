@@ -71,6 +71,9 @@ export class MainScene extends Phaser.Scene {
   create(): void {
     this.playerRenderer = new PlayerRenderer(this);
 
+    // Object Pool 미리 생성 (게임 시작 렉 방지)
+    this.playerRenderer.prewarmPool(25);
+
     // 모바일 감지
     const isTouchDevice = 'ontouchstart' in window;
 

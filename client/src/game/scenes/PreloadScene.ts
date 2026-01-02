@@ -125,10 +125,10 @@ export class PreloadScene extends Phaser.Scene {
 
   /**
    * 그리드 타일 텍스처 생성 (PC 최적화)
-   * 512x512 타일을 한 번만 생성하여 TileSprite로 반복 사용
+   * 500x500 타일을 한 번만 생성하여 TileSprite로 반복 사용
    */
   private createGridTile(): void {
-    const tileSize = 512;
+    const tileSize = 500; // 100px 그리드와 맞추기 위해 500 사용
     const gridSize = 100;
     const graphics = this.add.graphics();
 

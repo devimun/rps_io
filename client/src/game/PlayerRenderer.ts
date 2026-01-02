@@ -54,6 +54,85 @@ export class PlayerRenderer {
   }
 
   /**
+   * Object Pool을 미리 생성합니다 (게임 시작 렉 방지)
+   * PreloadScene에서 호출됩니다.
+   * @param count - 미리 생성할 스프라이트 수
+   */
+  prewarmPool(count: number = 20): void {
+
+
+    for (let i = 0; i < count && this.containerPool.length < this.MAX_POOL_SIZE; i++) {
+      const container = this.createEmptyContainer();
+      // 화면 밖으로 이동 + 숨김 (완전히 보이지 않도록)
+      container.setPosition(-9999, -9999);
+      container.setVisible(false);
+      container.setAlpha(0);
+      this.containerPool.push(container);
+    }
+
+
+  }
+
+  /**
+   * 빈 Container 생성 (Object Pool용)
+   * 모든 하위 객체를 미리 생성해둠
+   */
+  private createEmptyContainer(): Phaser.GameObjects.Container {
+    const container = this.scene.add.container(0, 0);
+
+    // 플레이어는 맵 위에 표시 (depth: 10)
+    container.setDepth(10);
+
+    // 본체 Graphics
+    const body = this.scene.add.graphics();
+    container.add(body);
+    container.setData('body', body);
+    container.setData('playerColor', 0xffffff);
+    container.setData('currentSize', 30);
+
+    // 눈 Graphics
+    const leftEye = this.scene.add.graphics();
+    const rightEye = this.scene.add.graphics();
+    container.add(leftEye);
+    container.add(rightEye);
+    container.setData('leftEye', leftEye);
+    container.setData('rightEye', rightEye);
+
+    // RPS 이모지 텍스트
+    const emojiText = this.scene.add.text(0, -45, '✊', {
+      fontSize: '28px',
+      fontFamily: 'Arial, sans-serif',
+    });
+    emojiText.setOrigin(0.5);
+    container.add(emojiText);
+    container.setData('emojiText', emojiText);
+
+    // 닉네임 텍스트
+    const nameText = this.scene.add.text(0, -65, '', {
+      fontSize: '14px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 2,
+    });
+    nameText.setOrigin(0.5);
+    container.add(nameText);
+    container.setData('nameText', nameText);
+
+    // 왕관 텍스트
+    const crownText = this.scene.add.text(0, -90, '👑', {
+      fontSize: '16px',
+    });
+    crownText.setOrigin(0.5);
+    crownText.setVisible(false);
+    container.add(crownText);
+    container.setData('crownText', crownText);
+    container.setData('isFirstPlace', false);
+
+    return container;
+  }
+
+  /**
    * Container를 풀에 반환 (재사용을 위해)
    */
   returnToPool(container: Phaser.GameObjects.Container): void {
@@ -74,66 +153,54 @@ export class PlayerRenderer {
   // 특정 컴퓨터에서는 타이머가 걍 꺼져있는 수준 줄어드는 게 안보임
   // 몇몇 컴퓨터는 완벽하게 잘 작동함.
   /**
-   * 플레이어 스프라이트 생성
+   * 플레이어 스프라이트 생성 (Object Pool 사용)
    */
   createSprite(player: Player, isMe: boolean): Phaser.GameObjects.Container {
-    const container = this.scene.add.container(player.x, player.y);
     const playerColor = PLAYER_COLORS[getPlayerColorIndex(player.nickname)];
 
-    // 본체 원
-    const body = this.scene.add.graphics();
-    container.add(body);
-    container.setData('body', body);
+    // 풀에서 Container 가져오기 (없으면 새로 생성)
+    let container: Phaser.GameObjects.Container;
+
+    if (this.containerPool.length > 0) {
+      // 풀에서 재사용
+      container = this.containerPool.pop()!;
+      container.setPosition(player.x, player.y);
+      container.setVisible(true);
+      container.setAlpha(1);
+      container.setScale(1);
+    } else {
+      // 새로 생성 (풀이 비어있을 때)
+      container = this.createEmptyContainer();
+      container.setPosition(player.x, player.y);
+      container.setVisible(true);
+    }
+
+    // 플레이어 데이터 업데이트
     container.setData('playerColor', playerColor);
     container.setData('currentSize', player.size);
-
-    // 눈 (왼쪽, 오른쪽)
-    const leftEye = this.scene.add.graphics();
-    const rightEye = this.scene.add.graphics();
-    container.add(leftEye);
-    container.add(rightEye);
-    container.setData('leftEye', leftEye);
-    container.setData('rightEye', rightEye);
-
-    // RPS 이모지 텍스트 (플레이어 크기에 비례, 최소 28px)
-    const emojiSize = Math.max(28, Math.min(48, player.size * 0.6)); // 28px ~ 48px
-    const emojiText = this.scene.add.text(0, -player.size - 15, RPS_EMOJI[player.rpsState], {
-      fontSize: `${emojiSize}px`,
-      fontFamily: 'Arial, sans-serif',
-    });
-    emojiText.setOrigin(0.5);
-    container.add(emojiText);
-    container.setData('emojiText', emojiText);
-
-    // 닉네임 텍스트
-    const nameText = this.scene.add.text(0, -player.size - 35, player.nickname, {
-      fontSize: '14px',
-      fontFamily: 'Arial, sans-serif',
-      color: isMe ? '#4ecdc4' : '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 2,
-    });
-    nameText.setOrigin(0.5);
-    container.add(nameText);
-    container.setData('nameText', nameText);
-
-    // 왕관 텍스트 (1등 플레이어용)
-    const crownText = this.scene.add.text(0, -player.size - 60, '👑', {
-      fontSize: '16px',
-    });
-    crownText.setOrigin(0.5);
-    crownText.setVisible(false);
-    container.add(crownText);
-    container.setData('crownText', crownText);
+    container.setData('lastRpsState', undefined);
+    container.setData('lastSizeRounded', undefined);
     container.setData('isFirstPlace', false);
 
-    // 대시바 (내 플레이어만)
-    if (isMe) {
+    // 닉네임 텍스트 업데이트
+    const nameText = container.getData('nameText') as Phaser.GameObjects.Text;
+    nameText.setText(player.nickname);
+    nameText.setColor(isMe ? '#4ecdc4' : '#ffffff');
+
+    // 이모지 텍스트 업데이트
+    const emojiText = container.getData('emojiText') as Phaser.GameObjects.Text;
+    emojiText.setText(RPS_EMOJI[player.rpsState]);
+
+    // 왕관 초기화
+    const crownText = container.getData('crownText') as Phaser.GameObjects.Text;
+    crownText.setVisible(false);
+
+    // 대시바 (내 플레이어만) - 풀에서 가져온 경우 추가 필요할 수 있음
+    if (isMe && !container.getData('dashBar')) {
       const dashBar = this.scene.add.graphics();
       container.add(dashBar);
       container.setData('dashBar', dashBar);
 
-      // BOOST 텍스트
       const boostText = this.scene.add.text(0, player.size + 32, 'BOOST', {
         fontSize: '10px',
         fontFamily: 'Arial, sans-serif',
