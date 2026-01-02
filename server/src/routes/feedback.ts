@@ -33,6 +33,14 @@ const feedbackRoute: FastifyPluginAsync = async (fastify) => {
         // 피드백 ID 생성
         const feedbackId = `fb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+        // 콘솔에 먼저 출력 (DB 실패해도 로그는 남김)
+        console.log('📬 [Feedback Received]', {
+            id: feedbackId,
+            type,
+            email: email || 'anonymous',
+            content: content.substring(0, 100) + '...',
+        });
+
         try {
             const pool = getPool();
 
@@ -51,22 +59,19 @@ const feedbackRoute: FastifyPluginAsync = async (fastify) => {
                 ]
             );
 
-            // 콘솔에도 출력
-            console.log('📬 [Feedback Received]', {
-                id: feedbackId,
-                type,
-                email: email || 'anonymous',
-                content: content.substring(0, 100) + '...',
-            });
-
             return reply.code(201).send({
                 success: true,
-                message: 'Feedback received',
+                message: 'Feedback received and saved',
                 id: feedbackId,
             });
         } catch (error) {
-            console.error('[Feedback] Error saving feedback:', error);
-            return reply.code(500).send({ error: 'Failed to save feedback' });
+            // DB 에러 시에도 성공 응답 (로그는 이미 남았으므로)
+            console.warn('[Feedback] DB save failed, but logged to console:', error instanceof Error ? error.message : error);
+            return reply.code(201).send({
+                success: true,
+                message: 'Feedback received (logged)',
+                id: feedbackId,
+            });
         }
     });
 

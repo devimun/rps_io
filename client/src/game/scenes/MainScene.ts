@@ -59,6 +59,10 @@ export class MainScene extends Phaser.Scene {
   private currentAngle = 0;
   /** 마지막 터치 시간 (더블탭 감지용) */
   private lastTapTime = 0;
+  /** 게임 준비 완료 여부 */
+  private isReady = false;
+  /** 웜업 프레임 카운터 */
+  private warmupFrames = 0;
 
   constructor() {
     super({ key: SCENE_KEYS.MAIN });
@@ -74,6 +78,11 @@ export class MainScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
     this.cameras.main.setBounds(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
     this.cameras.main.setZoom(isTouchDevice ? 0.6 : 1.0);
+
+    // 초기 렉 방지: 처음에 카메라 숨기고 준비 완료 후 표시
+    this.cameras.main.setAlpha(0);
+    this.isReady = false;
+    this.warmupFrames = 0;
 
     this.createGrid();
     this.setupInput();
@@ -225,6 +234,22 @@ export class MainScene extends Phaser.Scene {
     const { players, myPlayer } = useGameStore.getState();
     const { isMobile } = useUIStore.getState();
     const myPlayerId = myPlayer?.id ?? null;
+
+    // 웜업 프레임: 처음 몇 프레임은 렌더링만 하고 표시하지 않음
+    if (!this.isReady) {
+      this.warmupFrames++;
+      // 3프레임 후 카메라 표시 (충분한 초기화 시간)
+      if (this.warmupFrames >= 3 && myPlayer) {
+        this.isReady = true;
+        // 부드러운 페이드인
+        this.tweens.add({
+          targets: this.cameras.main,
+          alpha: 1,
+          duration: 150,
+          ease: 'Power2',
+        });
+      }
+    }
 
     // 모바일 성능 최적화: 화면 밖 플레이어 업데이트 스킵
     const visiblePlayers = isMobile

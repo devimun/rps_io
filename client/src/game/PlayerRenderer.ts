@@ -163,6 +163,7 @@ export class PlayerRenderer {
     let targetX = player.x;
     let targetY = player.y;
     let targetSize = player.size;
+    let hasInterpolation = false;
 
     // 모든 플레이어에게 보간 적용
     if (hasBuffer(player.id)) {
@@ -171,19 +172,35 @@ export class PlayerRenderer {
         targetX = interpolated.x;
         targetY = interpolated.y;
         targetSize = interpolated.size;
+        hasInterpolation = true;
       }
     }
 
-    // 스무딩 적용 (부드러움 유지하면서 반응성 개선)
-    // 빠른 lerp (0.5) - 충돌 판정과 거의 일치하면서 부드러움 유지
-    const smoothFactor = 0.5;
-    container.x = Phaser.Math.Linear(container.x, targetX, smoothFactor);
-    container.y = Phaser.Math.Linear(container.y, targetY, smoothFactor);
+    // 첫 프레임(버퍼 없음) 또는 거리가 너무 멀면 즉시 적용 (텔레포트 방지)
+    const dx = targetX - container.x;
+    const dy = targetY - container.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const shouldTeleport = !hasInterpolation || distance > 200;
 
-    // 크기도 스무딩 적용 (충돌 판정 일치 + 부드러움)
-    const currentSize = container.getData('currentSize') as number || targetSize;
-    const smoothedSize = Phaser.Math.Linear(currentSize, targetSize, smoothFactor);
-    container.setData('currentSize', smoothedSize);
+    if (shouldTeleport) {
+      // 즉시 적용 (게임 시작, 스폰, 큰 위치 차이)
+      container.x = targetX;
+      container.y = targetY;
+      container.setData('currentSize', targetSize);
+    } else {
+      // 스무딩 적용 (부드러움 유지하면서 반응성 개선)
+      const smoothFactor = 0.5;
+      container.x = Phaser.Math.Linear(container.x, targetX, smoothFactor);
+      container.y = Phaser.Math.Linear(container.y, targetY, smoothFactor);
+
+      // 크기도 스무딩 적용
+      const currentSize = container.getData('currentSize') as number || targetSize;
+      const smoothedSize = Phaser.Math.Linear(currentSize, targetSize, smoothFactor);
+      container.setData('currentSize', smoothedSize);
+    }
+
+    // smoothedSize 계산 (렌더링용)
+    const smoothedSize = container.getData('currentSize') as number || targetSize;
 
     const playerColor = container.getData('playerColor') as number;
     const rpsColor = RPS_COLORS[player.rpsState];
