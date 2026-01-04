@@ -6,17 +6,12 @@
  * - memo로 개별 아이템 리렌더링 방지
  * - useCallback으로 이벤트 핸들러 메모이제이션
  * - CSS 애니메이션으로 JS 타이머 최소화
+ * - 이모지 대신 스프라이트 이미지 사용
  */
 import { useEffect, useState, useCallback, memo } from 'react';
-import type { KillFeedEvent, RPSState } from '@chaos-rps/shared';
+import type { KillFeedEvent } from '@chaos-rps/shared';
 import { useGameStore } from '../../stores/gameStore';
-
-/** RPS 상태별 이모지 */
-const RPS_EMOJI: Record<RPSState, string> = {
-  rock: '✊',
-  paper: '✋',
-  scissors: '✌️',
-};
+import { RpsSprite } from './RpsSprite';
 
 /** 킬 피드 아이템 Props */
 interface KillFeedItemProps {
@@ -30,18 +25,17 @@ interface KillFeedItemProps {
 const KillFeedItem = memo(function KillFeedItem({ event, isHighlighted }: KillFeedItemProps) {
   return (
     <div
-      className={`flex items-center gap-1 px-2 py-1 rounded text-sm animate-fade-out ${
-        isHighlighted
+      className={`flex items-center gap-1 px-2 py-1 rounded text-sm animate-fade-out ${isHighlighted
           ? 'bg-yellow-500/30 border border-yellow-500/50'
           : 'bg-black/50'
-      }`}
+        }`}
     >
       <span className={`font-medium ${isHighlighted ? 'text-yellow-300' : 'text-green-400'}`}>
         {event.winnerNickname}
       </span>
-      <span className="text-lg">{RPS_EMOJI[event.winnerRpsState]}</span>
+      <RpsSprite state={event.winnerRpsState} size={20} />
       <span className="text-gray-400 mx-1">→</span>
-      <span className="text-lg">{RPS_EMOJI[event.loserRpsState]}</span>
+      <RpsSprite state={event.loserRpsState} size={20} />
       <span className={`font-medium ${isHighlighted ? 'text-yellow-300' : 'text-red-400'}`}>
         {event.loserNickname}
       </span>
@@ -59,7 +53,7 @@ export const KillFeed = memo(function KillFeed() {
   // 킬 피드 이벤트 핸들러
   const handleKillFeed = useCallback((event: CustomEvent<KillFeedEvent>) => {
     const newEvent = event.detail;
-    
+
     setKillFeed((prev) => {
       const newFeed = [...prev, newEvent].slice(-5);
       return newFeed;
@@ -91,7 +85,7 @@ export const KillFeed = memo(function KillFeed() {
           }
         />
       ))}
-      
+
       {/* CSS 애니메이션 정의 */}
       <style>{`
         @keyframes fadeOut {

@@ -77,51 +77,29 @@ export class PreloadScene extends Phaser.Scene {
    * 게임에 필요한 모든 에셋을 로딩합니다.
    */
   private loadAssets(): void {
-    // 플레이어 스프라이트 (프로시저럴 생성을 위한 플레이스홀더)
-    // 실제 에셋이 없으므로 프로시저럴 그래픽 사용
-    this.createProceduralAssets();
+    // RPS 스프라이트시트 로드 (128x128 * 3 = 384x128)
+    // 순서: 주먹(rock), 보자기(paper), 가위(scissors)
+    this.load.spritesheet('rps-sprites', '/assets/images/rps.png', {
+      frameWidth: 128,
+      frameHeight: 128,
+    });
 
     // 그리드 타일 텍스처 생성 (PC 최적화)
     this.createGridTile();
 
-    // 로딩 완료 처리 (에셋이 없으므로 즉시 완료)
+    // 로딩 시작
     this.load.start();
   }
 
   /**
-   * 프로시저럴 에셋 생성
-   * 코드로 생성되는 그래픽 에셋입니다.
+   * RPS 스프라이트 프레임 인덱스
+   * 스프라이트시트 순서: rock(0), paper(1), scissors(2)
    */
-  private createProceduralAssets(): void {
-    // 가위 텍스처 생성
-    this.createRPSTexture('scissors', 0xff6b6b);
-    // 바위 텍스처 생성
-    this.createRPSTexture('rock', 0x4ecdc4);
-    // 보 텍스처 생성
-    this.createRPSTexture('paper', 0xffe66d);
-  }
-
-  /**
-   * RPS 상태별 텍스처 생성
-   * @param key - 텍스처 키
-   * @param color - 색상
-   */
-  private createRPSTexture(key: string, color: number): void {
-    const size = 64;
-    const graphics = this.add.graphics();
-
-    // 원형 배경
-    graphics.fillStyle(color, 1);
-    graphics.fillCircle(size / 2, size / 2, size / 2 - 2);
-
-    // 테두리
-    graphics.lineStyle(3, 0xffffff, 0.8);
-    graphics.strokeCircle(size / 2, size / 2, size / 2 - 2);
-
-    // 텍스처로 변환
-    graphics.generateTexture(key, size, size);
-    graphics.destroy();
-  }
+  static readonly RPS_FRAME_INDEX: Record<string, number> = {
+    rock: 0,
+    paper: 1,
+    scissors: 2,
+  };
 
   /**
    * 그리드 타일 텍스처 생성 (PC 최적화)

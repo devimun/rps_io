@@ -4,10 +4,10 @@
  */
 
 /** 현재 앱 버전 */
-export const APP_VERSION = '1.4.3';
+export const APP_VERSION = '1.4.4';
 
 /** 빌드 날짜 */
-export const BUILD_DATE = '2026-01-03';
+export const BUILD_DATE = '2026-01-05';
 
 /** 업데이트 로그 타입 */
 export interface UpdateLog {
@@ -19,6 +19,17 @@ export interface UpdateLog {
 
 /** 업데이트 히스토리 (최신순) */
 export const UPDATE_LOGS: UpdateLog[] = [
+  {
+    version: '1.4.4',
+    date: '2026-01-05',
+    title: { ko: '성능 대폭 개선 🚀', en: 'Major Performance Improvements 🚀' },
+    changes: [
+      { ko: '게임 시작이 훨씬 빨라졌어요! ⚡', en: 'Game starts much faster! ⚡' },
+      { ko: '가위바위보 아이콘이 이미지로 바뀌어 더 깔끔해졌어요 🎨', en: 'RPS icons are now images for a cleaner look 🎨' },
+      { ko: '게임 진입 시 버벅임이 크게 줄었어요 ✨', en: 'Much less stuttering when entering game ✨' },
+      { ko: '재방문 시 로딩이 더 빨라졌어요 💨', en: 'Faster loading on revisit 💨' },
+    ],
+  },
   {
     version: '1.4.3',
     date: '2026-01-03',

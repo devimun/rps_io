@@ -8,13 +8,21 @@
   <meta name="theme-color" content="#1F2937" />
   <title>ChaosRPS.io - 혼돈의 가위바위보</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-NRT7W3P4CM"></script>
+  <!-- Google Analytics (지연 로딩 - 초기 렌더링 최적화) -->
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag() { dataLayer.push(arguments); }
-    gtag('js', new Date());
-    gtag('config', 'G-NRT7W3P4CM');
+    // 초기 렌더링 완료 후 GTM 로드
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        var s = document.createElement('script');
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-NRT7W3P4CM';
+        s.async = true;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', 'G-NRT7W3P4CM');
+      }, 100);
+    });
   </script>
 </head>
 

@@ -6,28 +6,7 @@ import { useMemo, memo } from 'react';
 import { useGameStore } from '../../stores/gameStore';
 import { useUIStore } from '../../stores/uiStore';
 import { TRANSFORM_INTERVAL_MS } from '@chaos-rps/shared';
-import type { RPSState } from '@chaos-rps/shared';
-
-/** RPS 상태별 이모지 */
-const RPS_EMOJI: Record<RPSState, string> = {
-  rock: '✊',
-  paper: '✋',
-  scissors: '✌️',
-};
-
-/** RPS 상태별 색상 */
-const RPS_COLORS: Record<RPSState, string> = {
-  rock: '#4ecdc4',
-  paper: '#ffe66d',
-  scissors: '#ff6b6b',
-};
-
-/** RPS 상태별 한글 이름 */
-const RPS_NAMES: Record<RPSState, string> = {
-  rock: '바위',
-  paper: '보',
-  scissors: '가위',
-};
+import { RpsSprite, RPS_COLORS, RPS_NAMES } from './RpsSprite';
 
 /**
  * 변신 타이머 컴포넌트 (CSS 애니메이션 버전)
@@ -69,6 +48,7 @@ export const TransformTimer = memo(function TransformTimer() {
 
   // 통일된 너비: 모바일 50vw, PC 200px
   const boxWidth = isMobile ? '50vw' : '200px';
+  const spriteSize = isMobile ? 40 : 36;
 
   return (
     <>
@@ -105,9 +85,7 @@ export const TransformTimer = memo(function TransformTimer() {
           >
             NEXT
           </span>
-          <span style={{ fontSize: isMobile ? '7vw' : '36px' }}>
-            {RPS_EMOJI[nextState]}
-          </span>
+          <RpsSprite state={nextState} size={spriteSize} />
           <span
             className="font-bold"
             style={{
