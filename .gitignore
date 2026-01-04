@@ -40,3 +40,6 @@ coverage/
 # Kiro
 .kiro/
 
+# Chrome DevTools Trace files (contain API keys and sensitive data)
+*.trace
+Trace-*.json
