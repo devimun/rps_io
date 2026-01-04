@@ -71,8 +71,8 @@ export class MainScene extends Phaser.Scene {
   create(): void {
     this.playerRenderer = new PlayerRenderer(this);
 
-    // Object Pool 미리 생성 (게임 시작 렉 방지)
-    this.playerRenderer.prewarmPool(25);
+    // Object Pool 점진적 생성 (프레임 분할로 Long Task 방지)
+    this.playerRenderer.prewarmPool(25, 4);
 
     // 모바일 감지
     const isTouchDevice = 'ontouchstart' in window;
@@ -87,7 +87,10 @@ export class MainScene extends Phaser.Scene {
     this.isReady = false;
     this.warmupFrames = 0;
 
-    this.createGrid();
+    // 그리드 생성 지연 (첫 프레임 Long Task 방지)
+    this.time.delayedCall(100, () => {
+      this.createGrid();
+    });
     this.setupInput();
 
     // 주기적 입력 전송 (항상 이동)
@@ -241,23 +244,37 @@ export class MainScene extends Phaser.Scene {
     // 웜업 프레임: 처음 몇 프레임은 렌더링만 하고 표시하지 않음
     if (!this.isReady) {
       this.warmupFrames++;
-      // 3프레임 후 카메라 표시 (충분한 초기화 시간)
-      if (this.warmupFrames >= 3 && myPlayer) {
+      // 5프레임 후 카메라 표시 (충분한 초기화 시간 확보)
+      if (this.warmupFrames >= 5 && myPlayer) {
         this.isReady = true;
         // 부드러운 페이드인
         this.tweens.add({
           targets: this.cameras.main,
           alpha: 1,
-          duration: 150,
+          duration: 200,
           ease: 'Power2',
         });
       }
     }
 
     // 모바일 성능 최적화: 화면 밖 플레이어 업데이트 스킵
-    const visiblePlayers = isMobile
+    let visiblePlayers = isMobile
       ? this.getVisiblePlayers(players, myPlayer)
       : players;
+
+    // 초기 프레임에서는 근처 플레이어만 렌더링 (Long Task 방지)
+    const maxInitialPlayers = 5;
+    if (!this.isReady && visiblePlayers.size > maxInitialPlayers) {
+      const limitedPlayers = new Map<string, Player>();
+      let count = 0;
+      visiblePlayers.forEach((p, id) => {
+        if (id === myPlayerId || count < maxInitialPlayers) {
+          limitedPlayers.set(id, p);
+          count++;
+        }
+      });
+      visiblePlayers = limitedPlayers;
+    }
 
     this.updatePlayerSprites(visiblePlayers, myPlayerId, isMobile);
     this.updateCamera(myPlayerId);

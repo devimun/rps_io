@@ -16,11 +16,12 @@ export const RPS_COLORS: Record<RPSState, number> = {
   scissors: 0xff6b6b, // 빨간색 (가위)
 };
 
-/** RPS 상태별 이모지 */
-export const RPS_EMOJI: Record<RPSState, string> = {
-  rock: '✊',
-  paper: '✋',
-  scissors: '✌️',
+
+/** RPS 상태별 스프라이트 프레임 인덱스 */
+export const RPS_FRAME_INDEX: Record<RPSState, number> = {
+  rock: 0,
+  paper: 1,
+  scissors: 2,
 };
 
 /** 플레이어 색상 팔레트 (닉네임 해시 기반) */
@@ -54,23 +55,35 @@ export class PlayerRenderer {
   }
 
   /**
-   * Object Pool을 미리 생성합니다 (게임 시작 렉 방지)
-   * PreloadScene에서 호출됩니다.
+   * Object Pool을 점진적으로 생성합니다 (프레임 분할로 Long Task 방지)
+   * MainScene.create()에서 호출됩니다.
    * @param count - 미리 생성할 스프라이트 수
+   * @param batchSize - 프레임당 생성 개수 (기본값: 4)
    */
-  prewarmPool(count: number = 20): void {
+  prewarmPool(count: number = 20, batchSize: number = 4): void {
+    let created = 0;
 
+    const createBatch = () => {
+      const toCreate = Math.min(batchSize, count - created);
 
-    for (let i = 0; i < count && this.containerPool.length < this.MAX_POOL_SIZE; i++) {
-      const container = this.createEmptyContainer();
-      // 화면 밖으로 이동 + 숨김 (완전히 보이지 않도록)
-      container.setPosition(-9999, -9999);
-      container.setVisible(false);
-      container.setAlpha(0);
-      this.containerPool.push(container);
-    }
+      for (let i = 0; i < toCreate && this.containerPool.length < this.MAX_POOL_SIZE; i++) {
+        const container = this.createEmptyContainer();
+        // 화면 밖으로 이동 + 숨김 (완전히 보이지 않도록)
+        container.setPosition(-9999, -9999);
+        container.setVisible(false);
+        container.setAlpha(0);
+        this.containerPool.push(container);
+        created++;
+      }
 
+      // 남은 개수가 있으면 다음 프레임에서 계속
+      if (created < count && this.containerPool.length < this.MAX_POOL_SIZE) {
+        requestAnimationFrame(createBatch);
+      }
+    };
 
+    // 첫 번째 배치는 다음 프레임에서 시작
+    requestAnimationFrame(createBatch);
   }
 
   /**
@@ -98,14 +111,12 @@ export class PlayerRenderer {
     container.setData('leftEye', leftEye);
     container.setData('rightEye', rightEye);
 
-    // RPS 이모지 텍스트
-    const emojiText = this.scene.add.text(0, -45, '✊', {
-      fontSize: '28px',
-      fontFamily: 'Arial, sans-serif',
-    });
-    emojiText.setOrigin(0.5);
-    container.add(emojiText);
-    container.setData('emojiText', emojiText);
+    // RPS 스프라이트 (이미지로 변경 - 성능 최적화)
+    const rpsSprite = this.scene.add.sprite(0, -45, 'rps-sprites', 0);
+    rpsSprite.setOrigin(0.5);
+    rpsSprite.setScale(0.35);  // 128px → 약 45px 크기로 조절
+    container.add(rpsSprite);
+    container.setData('rpsSprite', rpsSprite);
 
     // 닉네임 텍스트
     const nameText = this.scene.add.text(0, -65, '', {
@@ -187,9 +198,9 @@ export class PlayerRenderer {
     nameText.setText(player.nickname);
     nameText.setColor(isMe ? '#4ecdc4' : '#ffffff');
 
-    // 이모지 텍스트 업데이트
-    const emojiText = container.getData('emojiText') as Phaser.GameObjects.Text;
-    emojiText.setText(RPS_EMOJI[player.rpsState]);
+    // RPS 스프라이트 업데이트
+    const rpsSprite = container.getData('rpsSprite') as Phaser.GameObjects.Sprite;
+    rpsSprite.setFrame(RPS_FRAME_INDEX[player.rpsState]);
 
     // 왕관 초기화
     const crownText = container.getData('crownText') as Phaser.GameObjects.Text;
@@ -292,16 +303,16 @@ export class PlayerRenderer {
       this.drawEyes(container, smoothedSize);
     }
 
-    // 텍스트 업데이트 (상태 변경 시에만)
+    // RPS 스프라이트 업데이트 (상태 변경 시에만)
     if (stateChanged) {
-      const emojiText = container.getData('emojiText') as Phaser.GameObjects.Text;
-      const emojiSize = Math.max(28, Math.min(48, smoothedSize * 0.6)); // 28px ~ 48px
-      emojiText.setText(RPS_EMOJI[player.rpsState]);
-      emojiText.setFontSize(emojiSize);
-      emojiText.setY(-smoothedSize - 20); // 간격 증가로 겹침 방지
+      const rpsSprite = container.getData('rpsSprite') as Phaser.GameObjects.Sprite;
+      const spriteScale = Math.max(0.25, Math.min(0.5, smoothedSize * 0.008)); // 크기에 비례
+      rpsSprite.setFrame(RPS_FRAME_INDEX[player.rpsState]);
+      rpsSprite.setScale(spriteScale);
+      rpsSprite.setY(-smoothedSize - 20); // 간격 증가로 겹침 방지
 
       const nameText = container.getData('nameText') as Phaser.GameObjects.Text;
-      nameText.setY(-smoothedSize - 45); // 이모지와 더 멀리
+      nameText.setY(-smoothedSize - 45); // 스프라이트와 더 멀리
     }
 
     // 1등 왕관 업데이트
