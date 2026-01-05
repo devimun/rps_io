@@ -25,8 +25,8 @@ interface InterpolatedPosition {
 /** 플레이어별 스냅샷 버퍼 (최근 N개 상태 저장) */
 const playerBuffers = new Map<string, Snapshot[]>();
 
-/** 버퍼 최대 크기 (약 500ms 분량 @ 20Hz) */
-const MAX_BUFFER_SIZE = 10;
+/** [1.4.5] 버퍼 최대 크기 축소 (10 → 6) - GC 압력 감소 */
+const MAX_BUFFER_SIZE = 6;
 
 /** 보간 지연 시간 (ms) - 이 시간만큼 과거 상태를 렌더링 */
 const INTERPOLATION_DELAY = 100;
@@ -82,6 +82,18 @@ export function removePlayerBuffer(playerId: string): void {
  */
 export function clearAllBuffers(): void {
     playerBuffers.clear();
+}
+
+/**
+ * [1.4.5] 연결 해제된 플레이어 버퍼 정리
+ * @param activePlayerIds 현재 활성 플레이어 ID 목록
+ */
+export function cleanStaleBuffers(activePlayerIds: Set<string>): void {
+    playerBuffers.forEach((_, id) => {
+        if (!activePlayerIds.has(id)) {
+            playerBuffers.delete(id);
+        }
+    });
 }
 
 /**

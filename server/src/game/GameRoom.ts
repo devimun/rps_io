@@ -351,7 +351,10 @@ export class GameRoomEntity implements IGameRoom {
       return json;
     });
 
-    this.onStateChange({ players: playersWithNext, timestamp: Date.now() });
+    // [1.4.5] 다음 변신까지 남은 시간 포함
+    const transformTimeRemaining = this.transformSystem.getTimeUntilNextTransform();
+
+    this.onStateChange({ players: playersWithNext, timestamp: Date.now(), transformTimeRemaining });
   }
 
   toJSON(): IGameRoom {

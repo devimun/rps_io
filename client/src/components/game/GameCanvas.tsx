@@ -156,7 +156,7 @@ export const GameCanvas = memo(function GameCanvas() {
           console.error('[Socket] Error:', error);
         },
         onGameState: (data) => {
-          updatePlayers(data.players, data.timestamp);
+          updatePlayers(data.players, data.timestamp, data.transformTimeRemaining);
         },
         onRankingUpdate: (rankings) => {
           updateRankings(rankings);
