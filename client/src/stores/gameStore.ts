@@ -4,7 +4,7 @@
  */
 import { create } from 'zustand';
 import type { Player, RankingEntry, RPSState } from '@chaos-rps/shared';
-import { addSnapshot, removePlayerBuffer, clearAllBuffers } from '../services/interpolationService';
+import { addSnapshot, removePlayerBuffer, clearAllBuffers, cleanStaleBuffers } from '../services/interpolationService';
 
 /** 게임 연결 상태 */
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -27,6 +27,8 @@ interface GameState {
   players: Map<string, Player>;
   rankings: RankingEntry[];
   serverTimestamp: number;
+  /** [1.4.5] 다음 변신까지 남은 시간 (ms) */
+  transformTimeRemaining: number;
 
   // 현재 플레이어 정보
   myPlayer: Player | null;
@@ -54,7 +56,7 @@ interface GameActions {
 
   // 게임 상태 관련
   setPhase: (phase: GamePhase) => void;
-  updatePlayers: (players: Player[], timestamp: number) => void;
+  updatePlayers: (players: Player[], timestamp: number, transformTimeRemaining?: number) => void;
   addPlayer: (player: Player) => void;
   removePlayer: (playerId: string) => void;
   updateRankings: (rankings: RankingEntry[]) => void;
@@ -86,6 +88,7 @@ const initialState: GameState = {
   players: new Map(),
   rankings: [],
   serverTimestamp: 0,
+  transformTimeRemaining: 4000, // 기본값 4초
   myPlayer: null,
   pendingTransform: null,
   transformWarningTime: null,
@@ -115,27 +118,66 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   setPhase: (phase) => set({ phase }),
 
-  updatePlayers: (players, timestamp) => {
+  updatePlayers: (players, timestamp, transformTimeRemaining) => {
+    const { nickname, players: existingPlayers } = get();
+    const isFirstUpdate = existingPlayers.size === 0;
     const playersMap = new Map<string, Player>();
-    players.forEach((p) => {
-      playersMap.set(p.id, p);
-      // 각 플레이어를 보간 버퍼에 추가
-      addSnapshot(p.id, p, timestamp);
-    });
 
-    const { nickname } = get();
-    // 닉네임으로 내 플레이어 찾기 (서버에서 생성된 ID가 다를 수 있음)
+    // 먼저 내 플레이어 찾기
     let myPlayer: Player | null = null;
-    if (nickname) {
-      for (const p of players) {
-        if (p.nickname === nickname && !p.isBot) {
-          myPlayer = p;
-          break;
-        }
+    for (const p of players) {
+      if (nickname && p.nickname === nickname && !p.isBot) {
+        myPlayer = p;
+        break;
       }
     }
 
-    set({ players: playersMap, serverTimestamp: timestamp, myPlayer });
+    // [1.4.5] 첫 업데이트 시 내 플레이어만 즉시 스냅샷 추가
+    // 나머지는 Map에만 추가 (렌더링 시점에 스냅샷 추가됨)
+    if (isFirstUpdate && myPlayer) {
+      addSnapshot(myPlayer.id, myPlayer, timestamp);
+    }
+
+    // 플레이어 Map 구성
+    for (const p of players) {
+      playersMap.set(p.id, p);
+      // 첫 업데이트가 아니거나, 내 플레이어가 아닌 경우에만 스냅샷 추가
+      // 첫 업데이트 시 다른 플레이어 스냅샷은 requestIdleCallback으로 지연
+      if (!isFirstUpdate) {
+        addSnapshot(p.id, p, timestamp);
+      }
+    }
+
+    // [1.4.5] 첫 업데이트 시 다른 플레이어 스냅샷 지연 추가
+    if (isFirstUpdate) {
+      const otherPlayers = players.filter(p => p.id !== myPlayer?.id);
+      let idx = 0;
+      const addBatch = () => {
+        const batch = otherPlayers.slice(idx, idx + 3);
+        for (const p of batch) {
+          addSnapshot(p.id, p, timestamp);
+        }
+        idx += 3;
+        if (idx < otherPlayers.length) {
+          requestAnimationFrame(addBatch);
+        }
+      };
+      if (otherPlayers.length > 0) {
+        requestAnimationFrame(addBatch);
+      }
+    }
+
+    // [1.4.5] 연결 해제된 플레이어 버퍼 정리
+    const activeIds = new Set(playersMap.keys());
+    cleanStaleBuffers(activeIds);
+
+    // [1.4.5] 서버 상태 업데이트
+    set({
+      players: playersMap,
+      serverTimestamp: timestamp,
+      transformTimeRemaining: transformTimeRemaining ?? get().transformTimeRemaining,
+      myPlayer
+    });
   },
 
   addPlayer: (player) => {

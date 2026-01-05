@@ -143,6 +143,8 @@ export interface GameStateUpdate {
   players: Player[];
   /** 서버 타임스탬프 */
   timestamp: number;
+  /** [1.4.5] 다음 변신까지 남은 시간 (ms) - 정확한 타이머 동기화용 */
+  transformTimeRemaining?: number;
 }
 
 /**

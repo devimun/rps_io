@@ -74,7 +74,8 @@ export class MainScene extends Phaser.Scene {
   private cachedMyPlayer: Player | null = null;
   private cachedIsMobile = false;
   private lastStoreCheckTime = 0;
-  private readonly STORE_CHECK_INTERVAL = 16;
+  /** [1.4.5] Store 캐싱 주기 증가 (16ms → 32ms) */
+  private readonly STORE_CHECK_INTERVAL = 32;
 
   constructor() {
     super({ key: SCENE_KEYS.MAIN });
@@ -421,14 +422,16 @@ export class MainScene extends Phaser.Scene {
     this.updateCamera(myPlayerId);
   }
 
+  /** [1.4.5] 화면 내 플레이어 필터링 - sqrt 제거로 성능 개선 */
   private getVisiblePlayers(players: Map<string, Player>, myPlayer: Player | null): Map<string, Player> {
     if (!myPlayer) return players;
-    const viewDistance = 600;
+    const viewDistanceSq = 600 * 600; // sqrt 제거
     const visiblePlayers = new Map<string, Player>();
     players.forEach((player, id) => {
       const dx = player.x - myPlayer.x;
       const dy = player.y - myPlayer.y;
-      if (id === myPlayer.id || Math.sqrt(dx * dx + dy * dy) < viewDistance) {
+      // [1.4.5] 제곱 비교로 sqrt 호출 제거
+      if (id === myPlayer.id || (dx * dx + dy * dy) < viewDistanceSq) {
         visiblePlayers.set(id, player);
       }
     });
