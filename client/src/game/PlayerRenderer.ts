@@ -2,6 +2,10 @@
  * 플레이어 렌더러
  * 플레이어 스프라이트 생성 및 업데이트 로직을 담당합니다.
  * Slither.io 스타일 Entity Interpolation 적용
+ * 
+ * [1.4.5 최적화]
+ * - Object Pool 점진적 생성
+ * - Interpolation 결과 캐싱
  */
 import Phaser from 'phaser';
 import type { Player, RPSState } from '@chaos-rps/shared';
@@ -48,7 +52,11 @@ export class PlayerRenderer {
   private scene: Phaser.Scene;
   /** Container 재사용 풀 (Object Pooling) */
   private containerPool: Phaser.GameObjects.Container[] = [];
-  private readonly MAX_POOL_SIZE = 30;
+  private readonly MAX_POOL_SIZE = 40;
+
+  /** [1.4.5] Interpolation 캐시 */
+  private interpolationCache: Map<string, { x: number; y: number; size: number; time: number }> = new Map();
+  private readonly INTERPOLATION_CACHE_TTL = 8; // 8ms (약 2프레임)
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -56,11 +64,10 @@ export class PlayerRenderer {
 
   /**
    * Object Pool을 점진적으로 생성합니다 (프레임 분할로 Long Task 방지)
-   * MainScene.create()에서 호출됩니다.
    * @param count - 미리 생성할 스프라이트 수
-   * @param batchSize - 프레임당 생성 개수 (기본값: 4)
+   * @param batchSize - 프레임당 생성 개수
    */
-  prewarmPool(count: number = 20, batchSize: number = 4): void {
+  prewarmPool(count: number = 20, batchSize: number = 1): void {
     let created = 0;
 
     const createBatch = () => {
@@ -68,7 +75,6 @@ export class PlayerRenderer {
 
       for (let i = 0; i < toCreate && this.containerPool.length < this.MAX_POOL_SIZE; i++) {
         const container = this.createEmptyContainer();
-        // 화면 밖으로 이동 + 숨김 (완전히 보이지 않도록)
         container.setPosition(-9999, -9999);
         container.setVisible(false);
         container.setAlpha(0);
@@ -76,14 +82,27 @@ export class PlayerRenderer {
         created++;
       }
 
-      // 남은 개수가 있으면 다음 프레임에서 계속
       if (created < count && this.containerPool.length < this.MAX_POOL_SIZE) {
         requestAnimationFrame(createBatch);
       }
     };
 
-    // 첫 번째 배치는 다음 프레임에서 시작
     requestAnimationFrame(createBatch);
+  }
+
+  /**
+   * [1.4.5] Pool에 컨테이너 1개 추가 (로딩 화면용)
+   * @returns 성공 여부
+   */
+  prewarmPoolOne(): boolean {
+    if (this.containerPool.length >= this.MAX_POOL_SIZE) return false;
+
+    const container = this.createEmptyContainer();
+    container.setPosition(-9999, -9999);
+    container.setVisible(false);
+    container.setAlpha(0);
+    this.containerPool.push(container);
+    return true;
   }
 
   /**
@@ -150,7 +169,7 @@ export class PlayerRenderer {
     if (this.containerPool.length < this.MAX_POOL_SIZE) {
       // 초기화하고 풀에 반환
       container.setVisible(false);
-      container.setPosition(0, 0);
+      container.setPosition(-9999, -9999);
       container.setAlpha(1);
       container.setScale(1);
       this.containerPool.push(container);
@@ -159,10 +178,7 @@ export class PlayerRenderer {
       container.destroy();
     }
   }
-  // 잘되는 컴퓨터도 있는데 안되는 컴퓨터도 있음. 
-  // 330 mbps , 500 mbps 
-  // 특정 컴퓨터에서는 타이머가 걍 꺼져있는 수준 줄어드는 게 안보임
-  // 몇몇 컴퓨터는 완벽하게 잘 작동함.
+
   /**
    * 플레이어 스프라이트 생성 (Object Pool 사용)
    */
@@ -200,7 +216,9 @@ export class PlayerRenderer {
 
     // RPS 스프라이트 업데이트
     const rpsSprite = container.getData('rpsSprite') as Phaser.GameObjects.Sprite;
-    rpsSprite.setFrame(RPS_FRAME_INDEX[player.rpsState]);
+    if (rpsSprite) {
+      rpsSprite.setFrame(RPS_FRAME_INDEX[player.rpsState]);
+    }
 
     // 왕관 초기화
     const crownText = container.getData('crownText') as Phaser.GameObjects.Text;
@@ -228,6 +246,32 @@ export class PlayerRenderer {
   }
 
   /**
+   * [1.4.5] 캐시된 Interpolation 결과 가져오기
+   */
+  private getCachedInterpolation(playerId: string, currentTime: number): { x: number; y: number; size: number } | null {
+    const cached = this.interpolationCache.get(playerId);
+    if (cached && (currentTime - cached.time) < this.INTERPOLATION_CACHE_TTL) {
+      return { x: cached.x, y: cached.y, size: cached.size };
+    }
+
+    // 캐시 미스: 새로 계산
+    if (hasBuffer(playerId)) {
+      const interpolated = getInterpolatedPosition(playerId, currentTime);
+      if (interpolated) {
+        this.interpolationCache.set(playerId, {
+          x: interpolated.x,
+          y: interpolated.y,
+          size: interpolated.size,
+          time: currentTime,
+        });
+        return interpolated;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * 플레이어 스프라이트 업데이트
    * Slither.io 스타일: 상태 버퍼에서 보간된 위치 사용
    */
@@ -243,15 +287,14 @@ export class PlayerRenderer {
     let targetSize = player.size;
     let hasInterpolation = false;
 
-    // 모든 플레이어에게 보간 적용
-    if (hasBuffer(player.id)) {
-      const interpolated = getInterpolatedPosition(player.id, Date.now());
-      if (interpolated) {
-        targetX = interpolated.x;
-        targetY = interpolated.y;
-        targetSize = interpolated.size;
-        hasInterpolation = true;
-      }
+    // [1.4.5] 캐시된 Interpolation 사용
+    const currentTime = Date.now();
+    const interpolated = this.getCachedInterpolation(player.id, currentTime);
+    if (interpolated) {
+      targetX = interpolated.x;
+      targetY = interpolated.y;
+      targetSize = interpolated.size;
+      hasInterpolation = true;
     }
 
     // 첫 프레임(버퍼 없음) 또는 거리가 너무 멀면 즉시 적용 (텔레포트 방지)
@@ -306,10 +349,12 @@ export class PlayerRenderer {
     // RPS 스프라이트 업데이트 (상태 변경 시에만)
     if (stateChanged) {
       const rpsSprite = container.getData('rpsSprite') as Phaser.GameObjects.Sprite;
-      const spriteScale = Math.max(0.25, Math.min(0.5, smoothedSize * 0.008)); // 크기에 비례
-      rpsSprite.setFrame(RPS_FRAME_INDEX[player.rpsState]);
-      rpsSprite.setScale(spriteScale);
-      rpsSprite.setY(-smoothedSize - 20); // 간격 증가로 겹침 방지
+      if (rpsSprite) {
+        const spriteScale = Math.max(0.25, Math.min(0.5, smoothedSize * 0.008)); // 크기에 비례
+        rpsSprite.setFrame(RPS_FRAME_INDEX[player.rpsState]);
+        rpsSprite.setScale(spriteScale);
+        rpsSprite.setY(-smoothedSize - 20); // 간격 증가로 겹침 방지
+      }
 
       const nameText = container.getData('nameText') as Phaser.GameObjects.Text;
       nameText.setY(-smoothedSize - 45); // 스프라이트와 더 멀리

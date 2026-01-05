@@ -1,10 +1,13 @@
 /**
  * 메인 게임 씬
- * 실제 게임 플레이가 이루어지는 씬입니다.
- * Slither.io 스타일: 항상 마우스/터치 방향으로 이동
+ * 에셋 로딩 + 게임 플레이를 모두 담당합니다.
+ * 
+ * [1.4.5] 단순화된 구조:
+ * 1. 로딩 화면 표시
+ * 2. 에셋, 텍스처, Pool 점진적 로딩 (프레임 드랍 방지)
+ * 3. 완료되면 게임 화면 표시
  */
 import Phaser from 'phaser';
-import { SCENE_KEYS } from './PreloadScene';
 import { useGameStore } from '../../stores/gameStore';
 import { useUIStore } from '../../stores/uiStore';
 import { socketService } from '../../services/socketService';
@@ -12,17 +15,18 @@ import type { Player } from '@chaos-rps/shared';
 import { WORLD_SIZE } from '@chaos-rps/shared';
 import { PlayerRenderer } from '../PlayerRenderer';
 
+/** 씬 키 상수 */
+export const SCENE_KEYS = {
+  MAIN: 'MainScene',
+} as const;
 
 /** 게임 월드 크기 */
 const WORLD_CONFIG = { WIDTH: WORLD_SIZE, HEIGHT: WORLD_SIZE };
 
-/** 마지막 대시 요청 시간 (클라이언트 쓰로틀링) */
+/** 마지막 대시 요청 시간 */
 let lastDashRequestTime = 0;
-const DASH_REQUEST_THROTTLE = 100; // 100ms 쓰로틀링
+const DASH_REQUEST_THROTTLE = 100;
 
-/**
- * 대시 가능 여부 확인 (클라이언트 측 체크)
- */
 function canDash(): boolean {
   const { isDashing, dashCooldownEndTime } = useGameStore.getState();
   if (isDashing) return false;
@@ -30,131 +34,315 @@ function canDash(): boolean {
   return true;
 }
 
-/**
- * 대시 요청 (상태 체크 + 쓰로틀링 후 전송)
- */
 function tryDash(): void {
   const now = Date.now();
-
-  // 클라이언트 쓰로틀링: 너무 빠른 연속 요청 방지
   if (now - lastDashRequestTime < DASH_REQUEST_THROTTLE) return;
-
   if (canDash()) {
-    lastDashRequestTime = now;
     lastDashRequestTime = now;
     socketService.sendDash();
   }
 }
 
 /**
- * 메인 게임 씬 클래스
- * Slither.io 스타일: 항상 마우스/터치 방향으로 이동, 절대 멈추지 않음
+ * 메인 게임 씬
  */
 export class MainScene extends Phaser.Scene {
   private playerSprites: Map<string, Phaser.GameObjects.Container> = new Map();
-  private readonly moveInterval = 50; // 50ms = 20Hz 입력 전송
+  private readonly moveInterval = 50;
   private playerRenderer!: PlayerRenderer;
 
-  /** 현재 이동 방향 각도 */
   private currentAngle = 0;
-  /** 마지막 터치 시간 (더블탭 감지용) */
   private lastTapTime = 0;
-  /** 게임 준비 완료 여부 */
-  private isReady = false;
-  /** 웜업 프레임 카운터 */
-  private warmupFrames = 0;
+  private isGameReady = false;
+
+  /** 로딩 UI */
+  private loadingText?: Phaser.GameObjects.Text;
+  private loadingBar?: Phaser.GameObjects.Graphics;
+  private loadingBarBg?: Phaser.GameObjects.Graphics;
+  private poolCreated = 0;
+  private readonly POOL_TARGET = 25;
+  /** [1.4.5] 최소 로딩 시간 (1초) */
+  private loadingStartTime = 0;
+  private readonly MIN_LOADING_TIME = 1000;
+
+  /** 점진적 플레이어 로딩 */
+  private pendingPlayers: Map<string, Player> = new Map();
+  private readonly PLAYERS_PER_FRAME = 3;
+
+  /** 프레임 연산 캐싱 */
+  private cachedPlayers: Map<string, Player> = new Map();
+  private cachedMyPlayer: Player | null = null;
+  private cachedIsMobile = false;
+  private lastStoreCheckTime = 0;
+  private readonly STORE_CHECK_INTERVAL = 16;
 
   constructor() {
     super({ key: SCENE_KEYS.MAIN });
   }
 
   create(): void {
-    this.playerRenderer = new PlayerRenderer(this);
+    const { width, height } = this.cameras.main;
+    const centerX = width / 2;
+    const centerY = height / 2;
 
-    // Object Pool 점진적 생성 (프레임 분할로 Long Task 방지)
-    this.playerRenderer.prewarmPool(25, 4);
+    // 배경색
+    this.cameras.main.setBackgroundColor('#1a1a2e');
 
-    // 모바일 감지
+    // 로딩 UI 생성
+    this.loadingBarBg = this.add.graphics();
+    this.loadingBarBg.fillStyle(0x333333, 1);
+    this.loadingBarBg.fillRect(centerX - 150, centerY, 300, 20);
+    this.loadingBarBg.setDepth(100);
+
+    this.loadingBar = this.add.graphics();
+    this.loadingBar.setDepth(100);
+
+    this.loadingText = this.add.text(centerX, centerY + 50, '에셋 로딩 중...', {
+      fontSize: '18px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#aaaaaa',
+    }).setOrigin(0.5).setDepth(100);
+
+    // 로딩 이벤트
+    this.load.on('progress', this.onLoadProgress, this);
+    this.load.on('complete', this.onAssetsLoaded, this);
+
+    // [1.4.5] 로딩 시작 시간 기록
+    this.loadingStartTime = Date.now();
+
+    // 에셋 로딩 시작
+    this.loadAssets();
+  }
+
+  /** 에셋 로딩 */
+  private loadAssets(): void {
+    this.load.spritesheet('rps-sprites', '/assets/images/rps.png', {
+      frameWidth: 128,
+      frameHeight: 128,
+    });
+    this.load.start();
+  }
+
+  /** 로딩 진행률 업데이트 */
+  private onLoadProgress(progress: number): void {
+    const { width, height } = this.cameras.main;
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    this.loadingBar?.clear();
+    this.loadingBar?.fillStyle(0x4ecdc4, 1);
+    this.loadingBar?.fillRect(centerX - 148, centerY + 2, 296 * progress * 0.3, 16);
+
+    this.loadingText?.setText(`에셋 로딩 중... ${Math.floor(progress * 30)}%`);
+  }
+
+  /** 에셋 로딩 완료 → 텍스처 생성 */
+  private onAssetsLoaded(): void {
+    this.loadingText?.setText('텍스처 생성 중... 30%');
+
+    // 다음 프레임에서 텍스처 생성 (프레임 드랍 방지)
+    requestAnimationFrame(() => this.createTexturesProgressively());
+  }
+
+  /** 텍스처 점진적 생성 */
+  private createTexturesProgressively(): void {
+    const { width, height } = this.cameras.main;
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    // Step 1: 그리드 타일
+    this.createGridTile();
+    this.updateLoadingBar(centerX, centerY, 0.4, '그리드 생성 중... 40%');
+
+    requestAnimationFrame(() => {
+      // Step 2: 큰 그리드
+      this.createBigGridTexture();
+      this.updateLoadingBar(centerX, centerY, 0.5, '월드 생성 중... 50%');
+
+      requestAnimationFrame(() => {
+        // Step 3: 경계선
+        this.createBorderTexture();
+        this.updateLoadingBar(centerX, centerY, 0.6, '월드 생성 완료... 60%');
+
+        // Pool 생성 시작
+        this.playerRenderer = new PlayerRenderer(this);
+        this.startPoolCreation();
+      });
+    });
+  }
+
+  /** Pool 점진적 생성 */
+  private startPoolCreation(): void {
+    const createOne = () => {
+      if (this.poolCreated >= this.POOL_TARGET) {
+        this.onLoadingComplete();
+        return;
+      }
+
+      // 1개 생성
+      this.playerRenderer.prewarmPoolOne();
+      this.poolCreated++;
+
+      // 진행률 업데이트
+      const progress = 0.6 + (this.poolCreated / this.POOL_TARGET) * 0.4;
+      const { width, height } = this.cameras.main;
+      this.updateLoadingBar(width / 2, height / 2, progress,
+        `게임 준비 중... ${Math.floor(progress * 100)}%`);
+
+      // 다음 프레임
+      requestAnimationFrame(createOne);
+    };
+
+    requestAnimationFrame(createOne);
+  }
+
+  /** 로딩 바 업데이트 */
+  private updateLoadingBar(centerX: number, centerY: number, progress: number, text: string): void {
+    this.loadingBar?.clear();
+    this.loadingBar?.fillStyle(0x4ecdc4, 1);
+    this.loadingBar?.fillRect(centerX - 148, centerY + 2, 296 * progress, 16);
+    this.loadingText?.setText(text);
+  }
+
+  /** 모든 로딩 완료 */
+  private onLoadingComplete(): void {
+    // [1.4.5] 최소 1초 로딩 시간 보장
+    const elapsed = Date.now() - this.loadingStartTime;
+    const remaining = Math.max(0, this.MIN_LOADING_TIME - elapsed);
+
+    this.loadingText?.setText('완료!');
+
+    // 로딩 UI 제거 + 게임 초기화
+    this.time.delayedCall(200 + remaining, () => {
+      this.loadingText?.destroy();
+      this.loadingBar?.destroy();
+      this.loadingBarBg?.destroy();
+
+      this.initializeGame();
+    });
+  }
+
+  /** 게임 초기화 */
+  private initializeGame(): void {
     const isTouchDevice = 'ontouchstart' in window;
+    this.cachedIsMobile = isTouchDevice;
 
+    // 배경색 변경
     this.cameras.main.setBackgroundColor('#16213e');
+
+    // 물리, 카메라 설정
     this.physics.world.setBounds(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
     this.cameras.main.setBounds(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
     this.cameras.main.setZoom(isTouchDevice ? 0.6 : 1.0);
 
-    // 초기 렉 방지: 처음에 카메라 숨기고 준비 완료 후 표시
-    this.cameras.main.setAlpha(0);
-    this.isReady = false;
-    this.warmupFrames = 0;
+    // 그리드 배치
+    this.createGrid();
 
-    // 그리드 생성 지연 (첫 프레임 Long Task 방지)
-    this.time.delayedCall(100, () => {
-      this.createGrid();
-    });
+    // 입력 설정
     this.setupInput();
 
-    // 주기적 입력 전송 (항상 이동)
+    // 주기적 입력 전송
     this.time.addEvent({
       delay: this.moveInterval,
       callback: this.sendCurrentDirection,
       callbackScope: this,
       loop: true,
     });
+
+    this.isGameReady = true;
   }
 
-  /**
-   * 그리드 배경 및 월드 경계선 생성
-   * PC: TileSprite로 캐시된 텍스처 사용 (성능 최적화)
-   * Mobile: 단순화된 그리드
-   */
+  //========================================
+  // 텍스처 생성
+  //========================================
+
+  private createGridTile(): void {
+    const tileSize = 500;
+    const gridSize = 100;
+    const graphics = this.add.graphics();
+
+    graphics.fillStyle(0x000000, 0);
+    graphics.fillRect(0, 0, tileSize, tileSize);
+
+    graphics.fillStyle(0x2a3a5e, 1);
+    for (let x = 0; x <= tileSize; x += gridSize) {
+      for (let y = 0; y <= tileSize; y += gridSize) {
+        graphics.fillCircle(x, y, 4);
+      }
+    }
+
+    graphics.lineStyle(1, 0x1e2d4a, 0.5);
+    for (let x = 0; x <= tileSize; x += gridSize) {
+      graphics.moveTo(x, 0);
+      graphics.lineTo(x, tileSize);
+    }
+    for (let y = 0; y <= tileSize; y += gridSize) {
+      graphics.moveTo(0, y);
+      graphics.lineTo(tileSize, y);
+    }
+    graphics.strokePath();
+
+    graphics.generateTexture('grid-tile', tileSize, tileSize);
+    graphics.destroy();
+  }
+
+  private createBigGridTexture(): void {
+    const worldSize = WORLD_SIZE;
+    const gridSize = 500;
+    const graphics = this.add.graphics();
+
+    graphics.lineStyle(2, 0x2a3a5e, 0.8);
+    for (let x = 0; x <= worldSize; x += gridSize) {
+      graphics.moveTo(x, 0);
+      graphics.lineTo(x, worldSize);
+    }
+    for (let y = 0; y <= worldSize; y += gridSize) {
+      graphics.moveTo(0, y);
+      graphics.lineTo(worldSize, y);
+    }
+    graphics.strokePath();
+
+    graphics.generateTexture('big-grid', worldSize, worldSize);
+    graphics.destroy();
+  }
+
+  private createBorderTexture(): void {
+    const worldSize = WORLD_SIZE;
+    const graphics = this.add.graphics();
+
+    graphics.lineStyle(8, 0xff4444, 1);
+    graphics.strokeRect(0, 0, worldSize, worldSize);
+
+    graphics.generateTexture('world-border', worldSize, worldSize);
+    graphics.destroy();
+  }
+
+  //========================================
+  // 그리드 배치
+  //========================================
+
   private createGrid(): void {
     const isMobile = useUIStore.getState().isMobile;
 
     if (isMobile) {
-      // 모바일: 단순화된 그리드 (기존 방식)
-      const graphics = this.add.graphics();
-
-      // 큰 그리드 선만 (500px 간격)
-      graphics.lineStyle(2, 0x2a3a5e, 0.8);
-      for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += 500) {
-        graphics.moveTo(x, 0);
-        graphics.lineTo(x, WORLD_CONFIG.HEIGHT);
+      if (this.textures.exists('big-grid')) {
+        this.add.image(WORLD_CONFIG.WIDTH / 2, WORLD_CONFIG.HEIGHT / 2, 'big-grid').setDepth(-10);
       }
-      for (let y = 0; y <= WORLD_CONFIG.HEIGHT; y += 500) {
-        graphics.moveTo(0, y);
-        graphics.lineTo(WORLD_CONFIG.WIDTH, y);
-      }
-      graphics.strokePath();
     } else {
-      // PC: TileSprite로 그리드 패턴 반복 (최적화)
-      this.add.tileSprite(
-        WORLD_CONFIG.WIDTH / 2,
-        WORLD_CONFIG.HEIGHT / 2,
-        WORLD_CONFIG.WIDTH,
-        WORLD_CONFIG.HEIGHT,
-        'grid-tile'
-      ).setDepth(-10); // 배경 레이어
-
-      // 큰 그리드 선 (500px 간격) - 시각적 강조
-      const bigGrid = this.add.graphics();
-      bigGrid.lineStyle(2, 0x2a3a5e, 0.8);
-      for (let x = 0; x <= WORLD_CONFIG.WIDTH; x += 500) {
-        bigGrid.moveTo(x, 0);
-        bigGrid.lineTo(x, WORLD_CONFIG.HEIGHT);
+      if (this.textures.exists('grid-tile')) {
+        this.add.tileSprite(WORLD_CONFIG.WIDTH / 2, WORLD_CONFIG.HEIGHT / 2,
+          WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT, 'grid-tile').setDepth(-10);
       }
-      for (let y = 0; y <= WORLD_CONFIG.HEIGHT; y += 500) {
-        bigGrid.moveTo(0, y);
-        bigGrid.lineTo(WORLD_CONFIG.WIDTH, y);
+      if (this.textures.exists('big-grid')) {
+        this.add.image(WORLD_CONFIG.WIDTH / 2, WORLD_CONFIG.HEIGHT / 2, 'big-grid')
+          .setDepth(-9).setAlpha(0.5);
       }
-      bigGrid.strokePath();
     }
 
-    // 월드 경계선 (공통)
-    const border = this.add.graphics();
-    border.lineStyle(8, 0xff4444, 1);
-    border.strokeRect(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
+    if (this.textures.exists('world-border')) {
+      this.add.image(WORLD_CONFIG.WIDTH / 2, WORLD_CONFIG.HEIGHT / 2, 'world-border').setDepth(-8);
+    }
 
-    // 경계 경고 영역 (PC만)
     if (!isMobile) {
       const warningZone = this.add.graphics();
       warningZone.fillStyle(0xff0000, 0.1);
@@ -166,192 +354,148 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * 입력 설정 - Slither.io 스타일
-   */
+  //========================================
+  // 입력 처리
+  //========================================
+
   private setupInput(): void {
     const isTouchDevice = 'ontouchstart' in window;
-    const DOUBLE_TAP_THRESHOLD = 300; // 300ms 이내 더블탭
+    const DOUBLE_TAP_THRESHOLD = 300;
 
-    // 포인터 다운 (터치 시작 또는 마우스 클릭)
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      // 방향 업데이트
       this.updateAngleFromPointer(pointer);
-
       if (isTouchDevice) {
-        // 모바일: 더블탭으로 대시
         const now = Date.now();
-        if (now - this.lastTapTime < DOUBLE_TAP_THRESHOLD) {
-          tryDash();
-        }
+        if (now - this.lastTapTime < DOUBLE_TAP_THRESHOLD) tryDash();
         this.lastTapTime = now;
-      } else {
-        // PC: 좌클릭으로 대시
-        if (pointer.leftButtonDown()) {
-          tryDash();
-        }
+      } else if (pointer.leftButtonDown()) {
+        tryDash();
       }
     });
 
-    // 포인터 이동 - 항상 방향 업데이트
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       this.updateAngleFromPointer(pointer);
     });
-
-    // 터치 이동 (모바일)
-    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.isDown || !isTouchDevice) {
-        this.updateAngleFromPointer(pointer);
-      }
-    });
   }
 
-  /**
-   * 포인터 위치에서 방향 각도 계산
-   */
   private updateAngleFromPointer(pointer: Phaser.Input.Pointer): void {
-    const { myPlayer } = useGameStore.getState();
+    const myPlayer = this.cachedMyPlayer || useGameStore.getState().myPlayer;
     if (!myPlayer) return;
-
     const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const dx = worldPoint.x - myPlayer.x;
-    const dy = worldPoint.y - myPlayer.y;
-
-    // 방향 업데이트 (거리와 상관없이)
-    this.currentAngle = Math.atan2(dy, dx);
+    this.currentAngle = Math.atan2(worldPoint.y - myPlayer.y, worldPoint.x - myPlayer.x);
   }
 
-  /**
-   * 현재 방향을 서버에 전송 - 항상 이동중 (isMoving: true)
-   */
   private sendCurrentDirection(): void {
-    const { myPlayer } = useGameStore.getState();
+    const myPlayer = this.cachedMyPlayer || useGameStore.getState().myPlayer;
     if (!myPlayer) return;
-
-    // Slither.io 스타일: 항상 이동
     socketService.sendMove({
       angle: this.currentAngle,
-      isMoving: true,  // 절대 멈추지 않음!
+      isMoving: true,
       timestamp: Date.now(),
     });
   }
 
-  update(): void {
-    const { players, myPlayer } = useGameStore.getState();
-    const { isMobile } = useUIStore.getState();
+  //========================================
+  // 게임 루프
+  //========================================
+
+  update(time: number): void {
+    if (!this.isGameReady) return;
+
+    // Store 캐싱
+    if (time - this.lastStoreCheckTime > this.STORE_CHECK_INTERVAL) {
+      const state = useGameStore.getState();
+      this.cachedPlayers = state.players;
+      this.cachedMyPlayer = state.myPlayer;
+      this.cachedIsMobile = useUIStore.getState().isMobile;
+      this.lastStoreCheckTime = time;
+    }
+
+    const players = this.cachedPlayers;
+    const myPlayer = this.cachedMyPlayer;
+    const isMobile = this.cachedIsMobile;
     const myPlayerId = myPlayer?.id ?? null;
 
-    // 웜업 프레임: 처음 몇 프레임은 렌더링만 하고 표시하지 않음
-    if (!this.isReady) {
-      this.warmupFrames++;
-      // 5프레임 후 카메라 표시 (충분한 초기화 시간 확보)
-      if (this.warmupFrames >= 5 && myPlayer) {
-        this.isReady = true;
-        // 부드러운 페이드인
-        this.tweens.add({
-          targets: this.cameras.main,
-          alpha: 1,
-          duration: 200,
-          ease: 'Power2',
-        });
-      }
-    }
-
-    // 모바일 성능 최적화: 화면 밖 플레이어 업데이트 스킵
-    let visiblePlayers = isMobile
-      ? this.getVisiblePlayers(players, myPlayer)
-      : players;
-
-    // 초기 프레임에서는 근처 플레이어만 렌더링 (Long Task 방지)
-    const maxInitialPlayers = 5;
-    if (!this.isReady && visiblePlayers.size > maxInitialPlayers) {
-      const limitedPlayers = new Map<string, Player>();
-      let count = 0;
-      visiblePlayers.forEach((p, id) => {
-        if (id === myPlayerId || count < maxInitialPlayers) {
-          limitedPlayers.set(id, p);
-          count++;
-        }
-      });
-      visiblePlayers = limitedPlayers;
-    }
-
-    this.updatePlayerSprites(visiblePlayers, myPlayerId, isMobile);
+    const visiblePlayers = isMobile ? this.getVisiblePlayers(players, myPlayer) : players;
+    this.updatePlayerSpritesProgressive(visiblePlayers, myPlayerId, isMobile);
     this.updateCamera(myPlayerId);
   }
 
-  /**
-   * 화면에 보이는 플레이어만 필터링 (모바일 최적화)
-   */
-  private getVisiblePlayers(
-    players: Map<string, Player>,
-    myPlayer: Player | null
-  ): Map<string, Player> {
+  private getVisiblePlayers(players: Map<string, Player>, myPlayer: Player | null): Map<string, Player> {
     if (!myPlayer) return players;
-
-    const viewDistance = 600; // 화면 반경
+    const viewDistance = 600;
     const visiblePlayers = new Map<string, Player>();
-
     players.forEach((player, id) => {
       const dx = player.x - myPlayer.x;
       const dy = player.y - myPlayer.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      // 내 플레이어 또는 화면 내 플레이어만 포함
-      if (id === myPlayer.id || distance < viewDistance) {
+      if (id === myPlayer.id || Math.sqrt(dx * dx + dy * dy) < viewDistance) {
         visiblePlayers.set(id, player);
       }
     });
-
     return visiblePlayers;
   }
 
-  private updatePlayerSprites(
-    players: Map<string, Player>,
-    myPlayerId: string | null,
-    isMobile: boolean
-  ): void {
-    // 사라진 플레이어 제거 (Object Pool 사용)
+  private updatePlayerSpritesProgressive(players: Map<string, Player>, myPlayerId: string | null, isMobile: boolean): void {
+    // 제거
     this.playerSprites.forEach((container, id) => {
       if (!players.has(id)) {
         this.tweens.add({
           targets: container,
-          scaleX: 0,
-          scaleY: 0,
-          alpha: 0,
+          scaleX: 0, scaleY: 0, alpha: 0,
           duration: 200,
           ease: 'Power2',
           onComplete: () => this.playerRenderer.returnToPool(container),
         });
         this.playerSprites.delete(id);
+        this.pendingPlayers.delete(id);
       }
     });
 
-    // 플레이어 스프라이트 생성/업데이트
+    // 대기열 추가
     players.forEach((player, id) => {
-      let container = this.playerSprites.get(id);
-
-      if (!container) {
-        container = this.playerRenderer.createSprite(player, id === myPlayerId);
-        this.playerSprites.set(id, container);
+      if (!this.playerSprites.has(id) && !this.pendingPlayers.has(id)) {
+        this.pendingPlayers.set(id, player);
       }
+    });
 
-      this.playerRenderer.updateSprite(container, player, id === myPlayerId, isMobile);
+    // 점진적 생성
+    let created = 0;
+    const entries = Array.from(this.pendingPlayers.entries());
+
+    // 내 플레이어 우선
+    for (const [id, player] of entries) {
+      if (id === myPlayerId && !this.playerSprites.has(id)) {
+        this.playerSprites.set(id, this.playerRenderer.createSprite(player, true));
+        this.pendingPlayers.delete(id);
+        created++;
+        break;
+      }
+    }
+
+    for (const [id, player] of entries) {
+      if (created >= this.PLAYERS_PER_FRAME || this.playerSprites.has(id)) continue;
+      this.playerSprites.set(id, this.playerRenderer.createSprite(player, id === myPlayerId));
+      this.pendingPlayers.delete(id);
+      created++;
+    }
+
+    // 업데이트
+    players.forEach((player, id) => {
+      const container = this.playerSprites.get(id);
+      if (container) this.playerRenderer.updateSprite(container, player, id === myPlayerId, isMobile);
     });
   }
 
   private updateCamera(playerId: string | null): void {
     if (!playerId) return;
-
     const container = this.playerSprites.get(playerId);
-    if (container) {
-      this.cameras.main.centerOn(container.x, container.y);
-    }
+    if (container) this.cameras.main.centerOn(container.x, container.y);
   }
 
   shutdown(): void {
     this.playerSprites.forEach((sprite) => sprite.destroy());
     this.playerSprites.clear();
+    this.pendingPlayers.clear();
     this.input.off('pointermove');
     this.input.off('pointerdown');
   }

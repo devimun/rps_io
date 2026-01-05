@@ -4,7 +4,7 @@
  */
 
 /** 현재 앱 버전 */
-export const APP_VERSION = '1.4.4';
+export const APP_VERSION = '1.4.5';
 
 /** 빌드 날짜 */
 export const BUILD_DATE = '2026-01-05';
@@ -19,6 +19,17 @@ export interface UpdateLog {
 
 /** 업데이트 히스토리 (최신순) */
 export const UPDATE_LOGS: UpdateLog[] = [
+  {
+    version: '1.4.5',
+    date: '2026-01-05',
+    title: { ko: '게임 시작 최적화 🚀', en: 'Game Start Optimization 🚀' },
+    changes: [
+      { ko: '게임 시작 시 프레임 드랍 대폭 개선 ⚡', en: 'Major frame drop fix when starting game ⚡' },
+      { ko: '로딩 화면이 더 부드러워졌어요 ✨', en: 'Loading screen is much smoother ✨' },
+      { ko: '점진적 플레이어 로딩으로 렉 방지 🎮', en: 'Progressive player loading to prevent lag 🎮' },
+      { ko: '전체적인 게임 안정성 향상 💪', en: 'Overall game stability improved 💪' },
+    ],
+  },
   {
     version: '1.4.4',
     date: '2026-01-05',
