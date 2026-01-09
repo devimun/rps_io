@@ -204,6 +204,15 @@ class SocketService {
   }
 
   /**
+   * [1.4.7] 사설방 부활 요청 전송
+   * 기존 플레이어를 새 위치에 리스폰합니다.
+   */
+  sendRespawn(): void {
+    if (!this.socket?.connected) return;
+    this.socket.emit('player:respawn');
+  }
+
+  /**
    * 연결 해제
    */
   disconnect(): void {

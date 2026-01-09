@@ -10,7 +10,7 @@
 import Phaser from 'phaser';
 import type { Player, RPSState } from '@chaos-rps/shared';
 import { DASH_COOLDOWN_MS } from '@chaos-rps/shared';
-import { useGameStore } from '../stores/gameStore';
+
 import { getInterpolatedPosition, hasBuffer } from '../services/interpolationService';
 
 /** RPS 상태별 색상 */
@@ -108,6 +108,7 @@ export class PlayerRenderer {
   /**
    * 빈 Container 생성 (Object Pool용)
    * 모든 하위 객체를 미리 생성해둠
+   * [1.4.7] Graphics → Image 변환으로 GPU 버퍼 재할당 방지
    */
   private createEmptyContainer(): Phaser.GameObjects.Container {
     const container = this.scene.add.container(0, 0);
@@ -115,20 +116,41 @@ export class PlayerRenderer {
     // 플레이어는 맵 위에 표시 (depth: 10)
     container.setDepth(10);
 
-    // 본체 Graphics
-    const body = this.scene.add.graphics();
+    // [1.4.7] 내 캐릭터 테두리 - Image로 변환 (Graphics strokeCircle 빈 공간 문제 해결)
+    // body 뒤에 더 큰 흰색 원을 배치하여 테두리 효과
+    const border = this.scene.add.image(0, 0, 'circle');
+    border.setOrigin(0.5);
+    border.setTint(0xffffff);
+    border.setVisible(false);
+    container.addAt(border, 0);  // body 뒤에 배치
+    container.setData('border', border);
+
+    // [1.4.7] 본체 - Image로 변환 (GPU 버퍼 재할당 방지)
+    const body = this.scene.add.image(0, 0, 'circle');
+    body.setOrigin(0.5);
+    body.setTint(0xffffff);
+    body.setVisible(false);  // [1.4.7] Pool 대기 시 숨김
     container.add(body);
     container.setData('body', body);
     container.setData('playerColor', 0xffffff);
     container.setData('currentSize', 30);
 
-    // 눈 Graphics
-    const leftEye = this.scene.add.graphics();
-    const rightEye = this.scene.add.graphics();
-    container.add(leftEye);
-    container.add(rightEye);
-    container.setData('leftEye', leftEye);
-    container.setData('rightEye', rightEye);
+    // [1.4.7] 눈 - Image x 4 (흰자 2개 + 동공 2개)
+    const leftEyeWhite = this.scene.add.image(0, 0, 'circle');
+    const rightEyeWhite = this.scene.add.image(0, 0, 'circle');
+    const leftPupil = this.scene.add.image(0, 0, 'circle');
+    const rightPupil = this.scene.add.image(0, 0, 'circle');
+
+    leftEyeWhite.setOrigin(0.5).setVisible(false);  // [1.4.7] Pool 대기 시 숨김
+    rightEyeWhite.setOrigin(0.5).setVisible(false);
+    leftPupil.setOrigin(0.5).setTint(0x000000).setVisible(false);
+    rightPupil.setOrigin(0.5).setTint(0x000000).setVisible(false);
+
+    container.add([leftEyeWhite, rightEyeWhite, leftPupil, rightPupil]);
+    container.setData('leftEyeWhite', leftEyeWhite);
+    container.setData('rightEyeWhite', rightEyeWhite);
+    container.setData('leftPupil', leftPupil);
+    container.setData('rightPupil', rightPupil);
 
     // RPS 스프라이트 (이미지로 변경 - 성능 최적화)
     const rpsSprite = this.scene.add.sprite(0, -45, 'rps-sprites', 0);
@@ -172,6 +194,21 @@ export class PlayerRenderer {
       container.setPosition(-9999, -9999);
       container.setAlpha(1);
       container.setScale(1);
+
+      // [1.4.7] Image 요소들 숨김 (재사용 전까지)
+      const body = container.getData('body') as Phaser.GameObjects.Image;
+      const border = container.getData('border') as Phaser.GameObjects.Image;
+      const leftEyeWhite = container.getData('leftEyeWhite') as Phaser.GameObjects.Image;
+      const rightEyeWhite = container.getData('rightEyeWhite') as Phaser.GameObjects.Image;
+      const leftPupil = container.getData('leftPupil') as Phaser.GameObjects.Image;
+      const rightPupil = container.getData('rightPupil') as Phaser.GameObjects.Image;
+      body?.setVisible(false);
+      border?.setVisible(false);
+      leftEyeWhite?.setVisible(false);
+      rightEyeWhite?.setVisible(false);
+      leftPupil?.setVisible(false);
+      rightPupil?.setVisible(false);
+
       this.containerPool.push(container);
     } else {
       // 풀이 가득 차면 파괴
@@ -208,6 +245,18 @@ export class PlayerRenderer {
     container.setData('lastRpsState', undefined);
     container.setData('lastSizeRounded', undefined);
     container.setData('isFirstPlace', false);
+
+    // [1.4.7] Image 요소들 visible 활성화 (Pool에서 숨겨진 상태였음)
+    const body = container.getData('body') as Phaser.GameObjects.Image;
+    const leftEyeWhite = container.getData('leftEyeWhite') as Phaser.GameObjects.Image;
+    const rightEyeWhite = container.getData('rightEyeWhite') as Phaser.GameObjects.Image;
+    const leftPupil = container.getData('leftPupil') as Phaser.GameObjects.Image;
+    const rightPupil = container.getData('rightPupil') as Phaser.GameObjects.Image;
+    body.setVisible(true);
+    leftEyeWhite.setVisible(true);
+    rightEyeWhite.setVisible(true);
+    leftPupil.setVisible(true);
+    rightPupil.setVisible(true);
 
     // 닉네임 텍스트 업데이트
     const nameText = container.getData('nameText') as Phaser.GameObjects.Text;
@@ -274,12 +323,17 @@ export class PlayerRenderer {
   /**
    * 플레이어 스프라이트 업데이트
    * Slither.io 스타일: 상태 버퍼에서 보간된 위치 사용
+   * [1.4.7] currentAngle 추가 - 눈동자 마우스 추적용
    */
   updateSprite(
     container: Phaser.GameObjects.Container,
     player: Player,
     isMe: boolean,
-    _isMobile: boolean
+    _isMobile: boolean,
+    rankings: any[], // TODO: 타입 정의 필요
+    isDashing: boolean,
+    dashCooldownEndTime: number,
+    currentAngle: number = 0
   ): void {
     // Entity Interpolation: 버퍼에서 보간된 위치 가져오기
     let targetX = player.x;
@@ -339,12 +393,12 @@ export class PlayerRenderer {
       container.setData('lastRpsState', player.rpsState);
       container.setData('lastSizeRounded', sizeRounded);
 
-      // 본체 그리기 (상태 변경 시에만)
+      // 본체 업데이트 (상태 변경 시에만)
       this.drawBody(container, smoothedSize, playerColor, rpsColor, isMe);
-
-      // 눈 그리기 (항상 표시 - 캐릭터 정체성)
-      this.drawEyes(container, smoothedSize);
     }
+
+    // [1.4.7] 눈 업데이트 (매 프레임 - 마우스 추적을 위해)
+    this.drawEyes(container, smoothedSize, currentAngle);
 
     // RPS 스프라이트 업데이트 (상태 변경 시에만)
     if (stateChanged) {
@@ -361,7 +415,7 @@ export class PlayerRenderer {
     }
 
     // 1등 왕관 업데이트
-    const rankings = useGameStore.getState().rankings;
+    // const rankings = useGameStore.getState().rankings; // [1.4.7] 제거됨
     const isFirstPlace = rankings.length > 0 && rankings[0].playerId === player.id;
     const wasFirstPlace = container.getData('isFirstPlace') as boolean;
 
@@ -389,12 +443,13 @@ export class PlayerRenderer {
 
     // 대시바 업데이트 (내 플레이어만)
     if (isMe) {
-      this.drawDashBar(container, smoothedSize);
+      this.drawDashBar(container, smoothedSize, isDashing, dashCooldownEndTime);
     }
   }
 
   /**
-   * 본체 그리기
+   * 본체 업데이트
+   * [1.4.7] Graphics → Image 변환으로 GPU 버퍼 재할당 방지
    */
   private drawBody(
     container: Phaser.GameObjects.Container,
@@ -403,41 +458,77 @@ export class PlayerRenderer {
     _rpsColor: number, // 더 이상 사용하지 않음
     isMe: boolean
   ): void {
-    const body = container.getData('body') as Phaser.GameObjects.Graphics;
-    body.clear();
+    const body = container.getData('body') as Phaser.GameObjects.Image;
+    const border = container.getData('border') as Phaser.GameObjects.Image;
 
-    // 본체만 그림 (RPS 색상 테두리 제거)
-    body.fillStyle(playerColor, 1);
-    body.fillCircle(0, 0, size);
+    // [1.4.7] scale 반올림으로 미세 떨림 방지
+    const roundedSize = Math.round(size);
+    const bodyScale = roundedSize / 64;
 
-    // 내 캐릭터만 흰색 테두리
+    // [1.4.7] Image: setScale + setTint (GPU 버퍼 재할당 없음)
+    body.setScale(bodyScale);
+    body.setTint(playerColor);
+
+    // 내 캐릭터만 흰색 테두리 (Image - body 뒤에 더 큰 원)
     if (isMe) {
-      body.lineStyle(3, 0xffffff, 1);
-      body.strokeCircle(0, 0, size + 2);
+      border.setVisible(true);
+      const borderScale = (roundedSize + 4) / 64;  // body보다 4px 더 큼
+      border.setScale(borderScale);
+    } else {
+      border.setVisible(false);
     }
   }
 
   /**
-   * 눈 그리기
+   * 눈 업데이트
+   * [1.4.7] Graphics → Image 변환 + 눈동자 마우스 추적
+   * 
+   * 눈 크기 조정 가이드:
+   * - EYE_SIZE_RATIO: 흰자 크기 비율 (본체 대비, 기본값 0.225 = 22.5%)
+   * - PUPIL_SIZE_RATIO: 동공 크기 비율 (흰자 대비, 기본값 0.6 = 60%)
+   * - EYE_OFFSET_RATIO: 눈 간격 비율 (본체 대비, 기본값 0.3 = 30%)
+   * - MAX_PUPIL_OFFSET_RATIO: 동공 이동 범위 (흰자 대비, 기본값 0.3 = 30%)
    */
-  private drawEyes(container: Phaser.GameObjects.Container, size: number): void {
-    const eyeOffset = size * 0.3;
-    const eyeSize = size * 0.15;
-    const pupilSize = eyeSize * 0.6;
+  private drawEyes(container: Phaser.GameObjects.Container, size: number, currentAngle: number = 0): void {
+    // ======== 조정 가능한 상수 ========
+    const EYE_SIZE_RATIO = 0.225;        // 흰자 크기 (50% 증가: 0.15 → 0.225)
+    const PUPIL_SIZE_RATIO = 0.6;        // 동공 크기 (흰자 대비)
+    const EYE_OFFSET_RATIO = 0.3;        // 눈 간격
+    const MAX_PUPIL_OFFSET_RATIO = 0.3;  // 동공 이동 범위
+    // ==================================
 
-    const leftEye = container.getData('leftEye') as Phaser.GameObjects.Graphics;
-    leftEye.clear();
-    leftEye.fillStyle(0xffffff, 1);
-    leftEye.fillCircle(-eyeOffset, -eyeSize, eyeSize);
-    leftEye.fillStyle(0x000000, 1);
-    leftEye.fillCircle(-eyeOffset, -eyeSize, pupilSize);
+    // [1.4.7] 반올림으로 미세 떨림 방지
+    const roundedSize = Math.round(size);
+    const eyeOffset = roundedSize * EYE_OFFSET_RATIO;
+    const eyeSize = roundedSize * EYE_SIZE_RATIO;
+    const eyeY = eyeSize; // 눈 Y 위치 (위쪽)
+    const pupilSize = eyeSize * PUPIL_SIZE_RATIO;
 
-    const rightEye = container.getData('rightEye') as Phaser.GameObjects.Graphics;
-    rightEye.clear();
-    rightEye.fillStyle(0xffffff, 1);
-    rightEye.fillCircle(eyeOffset, -eyeSize, eyeSize);
-    rightEye.fillStyle(0x000000, 1);
-    rightEye.fillCircle(eyeOffset, -eyeSize, pupilSize);
+    // [1.4.7] Image 기반 눈 (setPosition + setScale)
+    const leftEyeWhite = container.getData('leftEyeWhite') as Phaser.GameObjects.Image;
+    const rightEyeWhite = container.getData('rightEyeWhite') as Phaser.GameObjects.Image;
+    const leftPupil = container.getData('leftPupil') as Phaser.GameObjects.Image;
+    const rightPupil = container.getData('rightPupil') as Phaser.GameObjects.Image;
+
+    // 눈 흰자 위치 및 크기 (circle.png 128x128, 반지름 64px 기준)
+    const eyeWhiteScale = eyeSize / 64;
+    leftEyeWhite.setPosition(-eyeOffset, -eyeY);
+    leftEyeWhite.setScale(eyeWhiteScale);
+    rightEyeWhite.setPosition(eyeOffset, -eyeY);
+    rightEyeWhite.setScale(eyeWhiteScale);
+
+    // 눈동자 크기
+    const pupilScale = pupilSize / 64;
+    leftPupil.setScale(pupilScale);
+    rightPupil.setScale(pupilScale);
+
+    // [1.4.7] 눈동자 마우스 추적 - floor로 떨림 방지 강화
+    const maxPupilOffset = eyeSize * MAX_PUPIL_OFFSET_RATIO;
+    const pupilOffsetX = Math.floor(Math.cos(currentAngle) * maxPupilOffset);
+    const pupilOffsetY = Math.floor(Math.sin(currentAngle) * maxPupilOffset);
+
+    leftPupil.setPosition(-eyeOffset + pupilOffsetX, -eyeY + pupilOffsetY);
+    rightPupil.setPosition(eyeOffset + pupilOffsetX, -eyeY + pupilOffsetY);
   }
 
   /**
@@ -451,12 +542,17 @@ export class PlayerRenderer {
    * 대시바 그리기 (플레이어 아래에 표시)
    * 성능 최적화: 상태 변경 시에만 다시 그림
    */
-  private drawDashBar(container: Phaser.GameObjects.Container, size: number): void {
+  private drawDashBar(
+    container: Phaser.GameObjects.Container,
+    size: number,
+    isDashing: boolean,
+    dashCooldownEndTime: number
+  ): void {
     const dashBar = container.getData('dashBar') as Phaser.GameObjects.Graphics;
     const boostText = container.getData('boostText') as Phaser.GameObjects.Text;
     if (!dashBar) return;
 
-    const { isDashing, dashCooldownEndTime } = useGameStore.getState();
+    // const { isDashing, dashCooldownEndTime } = useGameStore.getState(); // [1.4.7] 제거됨
     const barWidth = 50;
     const barHeight = 6;
     const barY = size + 20;

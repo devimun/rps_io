@@ -35,6 +35,7 @@ function App() {
     isMobile,
     setIsInAppBrowser,
     setIsMobile,
+    setUIReady,
   } = useUIStore();
 
   /** URL에서 추출한 방 코드 (다이렉트 입장용) */
@@ -64,6 +65,22 @@ function App() {
       console.log('[App] Room code from URL:', roomCode);
     }
   }, [setIsInAppBrowser, setIsMobile]);
+
+  // [1.4.7] HUD 마운트 상태 추적
+  useEffect(() => {
+    // playing 또는 dead 상태일 때 HUD가 마운트됨
+    if (phase === 'playing' || phase === 'dead') {
+      // requestAnimationFrame으로 다음 프레임에 UI Ready 설정 (렌더링 완료 보장)
+      const handle = requestAnimationFrame(() => {
+        setUIReady(true);
+        console.log('[App] HUD mounted, isUIReady = true');
+      });
+      return () => cancelAnimationFrame(handle);
+    } else {
+      // idle/loading 상태에서는 UI Ready 초기화
+      setUIReady(false);
+    }
+  }, [phase, setUIReady]);
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">

@@ -1,16 +1,24 @@
 /**
  * 게임 로딩 화면 컴포넌트
  * 게임 시작 시 서버 연결 중에 표시됩니다.
+ * 
+ * [1.4.7] 로딩 종료 조건 강화:
+ * 1. 서버 연결 완료 (connectionStatus === 'connected')
+ * 2. UI 마운트 완료 (isUIReady === true)
+ * 3. 씬 로딩 완료 (isSceneReady === true)
  */
 import { useGameStore } from '../../stores/gameStore';
 import { useUIStore } from '../../stores/uiStore';
 
 export function GameLoadingScreen() {
     const connectionStatus = useGameStore((state) => state.connectionStatus);
+    const isSceneReady = useGameStore((state) => state.isSceneReady);
     const language = useUIStore((state) => state.language);
+    const isUIReady = useUIStore((state) => state.isUIReady);
 
-    // 연결 완료되면 표시 안 함
-    if (connectionStatus === 'connected') {
+    // [1.4.7] 모든 조건 충족 시에만 로딩 화면 제거
+    const isFullyReady = connectionStatus === 'connected' && isUIReady && isSceneReady;
+    if (isFullyReady) {
         return null;
     }
 

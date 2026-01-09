@@ -83,7 +83,7 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
       const data = await response.json();
       trackRoomJoinSuccess('public');
       setRoomInfo(data.roomId, data.code || '', data.playerId, nickname);
-      setPhase('playing');
+      setPhase('loading');
     } catch (error) {
       setError(t('error.connectionFailed', language));
       if (error instanceof Error) trackError(error, 'quick_join');
@@ -123,7 +123,7 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
       // GA4: 방 생성 성공 추적
       trackRoomCreateSuccess('private', data.code);
 
-      setPhase('playing');
+      setPhase('loading');
     } catch (error) {
       setError(t('error.connectionFailed', language));
       if (error instanceof Error) trackError(error, 'create_room');
@@ -168,7 +168,7 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
       window.history.replaceState({}, '', url.toString());
 
       setRoomInfo(data.roomId, roomCode.toUpperCase(), data.playerId, nickname, true); // 사설방 (코드 입장)
-      setPhase('playing');
+      setPhase('loading');
     } catch (err) {
       const message = err instanceof Error ? err.message : t('error.roomNotFound', language);
       setError(message);

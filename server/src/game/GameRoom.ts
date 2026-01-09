@@ -140,6 +140,32 @@ export class GameRoomEntity implements IGameRoom {
   isFull(): boolean { return this.players.size >= this.maxPlayers; }
   isEmpty(): boolean { return this.players.size === 0; }
 
+  /**
+   * [1.4.7] 플레이어 부활 처리
+   * 기존 플레이어를 새 위치에 리스폰합니다.
+   * @param playerId 부활할 플레이어 ID
+   * @returns 부활 성공 여부
+   */
+  respawnPlayer(playerId: string): boolean {
+    const player = this.players.get(playerId);
+    if (!player || player.isBot) return false;
+
+    // 격자 기반 스폰 시스템으로 안전한 위치 찾기
+    const existingPlayers = this.getPlayers()
+      .filter(p => p.id !== playerId)
+      .map(p => p.toJSON());
+    const spawnPos = this.spawnSystem.findSafeSpawnPosition(existingPlayers);
+
+    // 플레이어 상태 초기화 (킬 수 리셋) - 기존 reset 메서드 사용
+    player.reset(spawnPos.x, spawnPos.y);
+
+    // 대시 상태 초기화
+    this.dashSystem.removePlayer(playerId);
+
+    console.log(`🔄 플레이어 부활: ${player.nickname} (${playerId}) at (${spawnPos.x}, ${spawnPos.y})`);
+    return true;
+  }
+
   /** 봇으로 정원을 채웁니다 */
   fillBotsToCapacity(): void {
     const botsNeeded = this.maxPlayers - this.players.size;

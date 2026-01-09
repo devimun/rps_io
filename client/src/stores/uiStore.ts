@@ -40,6 +40,9 @@ interface UIState {
   isLoading: boolean;
   loadingMessage: string;
 
+  // [1.4.7] UI 마운트 완료 상태
+  isUIReady: boolean;
+
   // 에러 상태
   errorMessage: string | null;
 }
@@ -69,7 +72,10 @@ interface UIActions {
   // 로딩 관련
   setLoading: (isLoading: boolean, message?: string) => void;
 
-  // 에러 관련
+  // [1.4.7] UI Ready 관련
+  setUIReady: (ready: boolean) => void;
+  resetLoadingState: () => void;
+
   setError: (message: string | null) => void;
   clearError: () => void;
 }
@@ -86,6 +92,7 @@ const initialNonPersistedState = {
   activeModal: 'none' as ModalType,
   isLoading: false,
   loadingMessage: '',
+  isUIReady: false, // [1.4.7] UI 마운트 완료 상태
   errorMessage: null,
   isInAppBrowser: false,
   isMobile: false,
@@ -128,6 +135,10 @@ export const useUIStore = create<UIState & UIActions>()(
       // 로딩 액션
       setLoading: (isLoading, message = '') =>
         set({ isLoading, loadingMessage: message }),
+
+      // [1.4.7] UI Ready 액션
+      setUIReady: (ready) => set({ isUIReady: ready }),
+      resetLoadingState: () => set({ isUIReady: false, isLoading: false, loadingMessage: '' }),
 
       // 에러 액션
       setError: (message) => set({ errorMessage: message }),
