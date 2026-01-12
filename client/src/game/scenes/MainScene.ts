@@ -56,6 +56,7 @@ export class MainScene extends Phaser.Scene {
   private isGameReady = false;
 
   /** 로딩 UI */
+  private loadingOverlay?: Phaser.GameObjects.Graphics; // [1.4.8] 전체 화면 오버레이
   private loadingText?: Phaser.GameObjects.Text;
   private loadingBar?: Phaser.GameObjects.Graphics;
   private loadingBarBg?: Phaser.GameObjects.Graphics;
@@ -72,6 +73,8 @@ export class MainScene extends Phaser.Scene {
   private isAssetsLoaded = false;
   /** [1.4.7] 게임 초기화 완료 여부 (중복 초기화 방지) */
   private isGameInitialized = false;
+  /** [1.4.8] 로딩 완료 처리 중 여부 (중복 호출 방지) */
+  private isLoadingCompleteTriggered = false;
   /** [1.4.7] 로딩 진행률 (0.0 ~ 1.0) */
   private loadingProgress = 0;
   private poolCreated = 0;
@@ -153,6 +156,7 @@ export class MainScene extends Phaser.Scene {
     let lastPhase = useGameStore.getState().phase;
     this.unsubscribePhase = useGameStore.subscribe((state) => {
       if (state.phase !== lastPhase) {
+        const prevPhase = lastPhase;
         lastPhase = state.phase;
 
         // [1.4.7] 로비/IDLE 상태로 돌아오면 로딩 플래그 리셋 (다음 게임 로딩 준비)
@@ -161,8 +165,17 @@ export class MainScene extends Phaser.Scene {
           useGameStore.getState().setSceneReady(false);
         }
 
-        if (state.phase === 'loading' && !this.isAssetsLoaded) {
-          this.startLoadingProcess();
+        // [1.4.8] loading 상태로 진입 시 로딩 시작
+        // 이전 phase가 idle/lobby/dead가 아니더라도 loading으로 오면 isAssetsLoaded 리셋
+        if (state.phase === 'loading') {
+          // 첫 로딩이 아닌 경우(재시작) isAssetsLoaded 리셋 필요
+          if (prevPhase !== 'idle' && this.isGameInitialized) {
+            console.log('[MainScene] Re-entering loading phase, resetting...');
+            this.isAssetsLoaded = false;
+          }
+          if (!this.isAssetsLoaded) {
+            this.startLoadingProcess();
+          }
         }
       }
     });
@@ -175,13 +188,26 @@ export class MainScene extends Phaser.Scene {
 
   /** [1.4.7] 로딩 UI 생성 및 초기화 */
   private createLoadingUI(centerX: number, centerY: number): void {
+    const { width, height } = this.cameras.main;
+
+    // [1.4.8] 전체 화면 오버레이 (게임 콘텐츠를 완전히 가림)
+    // setScrollFactor(0)으로 카메라에 고정하여 항상 화면을 덮도록 함
+    this.loadingOverlay = this.add.graphics();
+    this.loadingOverlay.fillStyle(0x1a1a2e, 1); // 배경색과 동일
+    this.loadingOverlay.fillRect(-width, -height, width * 4, height * 4); // 충분히 크게
+    this.loadingOverlay.setScrollFactor(0); // 카메라에 고정
+    this.loadingOverlay.setDepth(9998);
+    this.loadingOverlay.setVisible(false);
+
     this.loadingBarBg = this.add.graphics();
     this.loadingBarBg.fillStyle(0x333333, 1);
     this.loadingBarBg.fillRect(centerX - 150, centerY, 300, 20);
+    this.loadingBarBg.setScrollFactor(0); // 카메라에 고정
     this.loadingBarBg.setDepth(9999);
     this.loadingBarBg.setVisible(false);
 
     this.loadingBar = this.add.graphics();
+    this.loadingBar.setScrollFactor(0); // 카메라에 고정
     this.loadingBar.setDepth(9999);
     this.loadingBar.setVisible(false);
 
@@ -189,7 +215,7 @@ export class MainScene extends Phaser.Scene {
       fontSize: '18px',
       fontFamily: 'Arial, sans-serif',
       color: '#aaaaaa',
-    }).setOrigin(0.5).setDepth(9999);
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(9999); // 카메라에 고정
     this.loadingText.setVisible(false);
 
     // 로딩 이벤트
@@ -201,10 +227,14 @@ export class MainScene extends Phaser.Scene {
   private startLoadingProcess(): void {
     console.log('[MainScene] Start Loading Process...');
     this.isAssetsLoaded = true;
+    this.isLoadingCompleteTriggered = false; // [1.4.8] 플래그 리셋
+    this.poolCreated = 0; // [1.4.8] 풀 생성 카운트 리셋 (재시작 시 100% 초과 방지)
+    this.loadingProgress = 0; // 진행률 리셋
     this.loadingStartTime = Date.now();
 
 
     // UI 표시
+    this.loadingOverlay?.setVisible(true); // [1.4.8] 전체 화면 오버레이
     this.loadingBarBg?.setVisible(true);
     this.loadingBar?.setVisible(true);
     this.loadingText?.setVisible(true);
@@ -241,10 +271,14 @@ export class MainScene extends Phaser.Scene {
 
   /** [1.4.7] 로딩 및 데이터 수신 완료 체크 */
   private checkReadyToStart(): void {
+    // [1.4.8] 이미 로딩 완료 처리 중이면 무시
+    if (this.isLoadingCompleteTriggered) return;
+
     // 로딩이 완료되었고, 게임 데이터(내 플레이어)도 수신했다면
     if (this.loadingProgress >= 1 && this.isGameReady) {
       // 로딩바가 켜져있을 때만 완료 처리 (중복 실행 방지)
       if (this.loadingBarBg?.visible) {
+        this.isLoadingCompleteTriggered = true;
         this.onLoadingComplete();
       }
     } else if (this.loadingProgress >= 1 && !this.isGameReady) {
@@ -363,6 +397,7 @@ export class MainScene extends Phaser.Scene {
 
     // 로딩 UI 제거 + 게임 초기화
     this.time.delayedCall(200 + remaining, () => {
+      this.loadingOverlay?.setVisible(false); // [1.4.8] 오버레이 숨김
       this.loadingText?.setVisible(false);
       this.loadingBar?.setVisible(false);
       this.loadingBarBg?.setVisible(false);
@@ -376,7 +411,16 @@ export class MainScene extends Phaser.Scene {
       useGameStore.getState().setSceneReady(true);
       console.log('[MainScene] Scene ready, isSceneReady = true');
 
-      useGameStore.getState().setPhase('playing'); // [1.4.7] 로딩 완료 -> 게임 시작
+      // [1.4.8] UI 준비 완료 대기 후 게임 시작
+      const waitForUI = () => {
+        if (useUIStore.getState().isUIReady) {
+          console.log('[MainScene] UI ready, transitioning to playing phase');
+          useGameStore.getState().setPhase('playing');
+        } else {
+          requestAnimationFrame(waitForUI);
+        }
+      };
+      waitForUI();
     });
   }
 

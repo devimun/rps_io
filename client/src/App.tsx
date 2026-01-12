@@ -21,7 +21,6 @@ import { detectDevice } from './utils/deviceDetector';
 import { extractRoomCode } from './utils/shareUtils';
 import { initAnalytics } from './services/analytics';
 import { FeedbackModal } from './components/ui/FeedbackButton';
-import { GameLoadingScreen } from './components/ui/GameLoadingScreen';
 
 /**
  * 메인 앱 컴포넌트
@@ -66,10 +65,10 @@ function App() {
     }
   }, [setIsInAppBrowser, setIsMobile]);
 
-  // [1.4.7] HUD 마운트 상태 추적
+  // [1.4.8] HUD 마운트 상태 추적 - loading 단계에서 미리 렌더링
   useEffect(() => {
-    // playing 또는 dead 상태일 때 HUD가 마운트됨
-    if (phase === 'playing' || phase === 'dead') {
+    // loading, playing, dead 상태일 때 HUD가 마운트됨
+    if (phase === 'loading' || phase === 'playing' || phase === 'dead') {
       // requestAnimationFrame으로 다음 프레임에 UI Ready 설정 (렌더링 완료 보장)
       const handle = requestAnimationFrame(() => {
         setUIReady(true);
@@ -77,7 +76,7 @@ function App() {
       });
       return () => cancelAnimationFrame(handle);
     } else {
-      // idle/loading 상태에서는 UI Ready 초기화
+      // idle 상태에서는 UI Ready 초기화
       setUIReady(false);
     }
   }, [phase, setUIReady]);
@@ -92,6 +91,7 @@ function App() {
 
       {/* GameCanvas: 로비에서부터 미리 마운트하여 Phaser 사전 초기화 (렉 방지) */}
       {/* visibility:hidden으로 숨기면 Phaser가 정상 초기화됨 (display:none은 불가) */}
+      {/* [1.4.8] 게임 캔버스 + HUD 컨테이너 */}
       <div
         className="w-full h-screen"
         style={{
@@ -103,8 +103,9 @@ function App() {
         }}
       >
         <GameCanvas />
-        {(phase === 'playing' || phase === 'dead') && (
-          <>
+        {/* [1.4.8] HUD: loading 단계에서 미리 마운트 (숨김), playing/dead에서 표시 */}
+        {(phase === 'loading' || phase === 'playing' || phase === 'dead') && (
+          <div style={{ visibility: phase === 'loading' ? 'hidden' : 'visible' }}>
             <TransformTimer />
             <InviteButtons />
             {/* 모바일: 랭킹 + 미니맵, PC: 전체 UI */}
@@ -121,15 +122,14 @@ function App() {
               </>
             )}
             <FullscreenButton />
-          </>
+          </div>
         )}
       </div>
 
       {/* 사망 화면 */}
       {phase === 'dead' && <DeathScreen />}
 
-      {/* 게임 로딩 화면 (서버 연결 중) */}
-      {phase === 'playing' && <GameLoadingScreen />}
+      {/* [1.4.8] GameLoadingScreen 삭제됨 - MainScene에서만 로딩 처리 */}
 
       {/* 튜토리얼 (첫 플레이 시) */}
       {phase === 'playing' && showTutorial && !tutorialDismissed && <Tutorial />}
