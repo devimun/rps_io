@@ -340,6 +340,8 @@ export class MainScene extends Phaser.Scene {
 
     // Step 1: 그리드 타일 (패턴용 작은 텍스처)
     this.createGridTile();
+    // [1.4.8] 대시바 텍스처 생성 (texImage2D 방지)
+    this.createDashBarTextures();
     this.updateLoadingBar(centerX, centerY, 0.4, '게임 리소스 생성 중... 40%');
 
     requestAnimationFrame(() => {
@@ -495,6 +497,38 @@ export class MainScene extends Phaser.Scene {
 
     graphics.generateTexture('grid-tile', tileSize, tileSize);
     graphics.destroy();
+  }
+
+  /**
+   * [1.4.8] 대시바용 텍스처 생성 (한 번만 생성하여 texImage2D 호출 방지)
+   * - white-pixel: 1x1 흰색 픽셀 (scale + tint로 바 렌더링)
+   * - dash-bar-bg: 둥근 모서리 배경
+   * - dash-bar-fill: 둥근 모서리 진행률 바
+   */
+  private createDashBarTextures(): void {
+    // 이미 생성되어 있으면 스킵
+    if (this.textures.exists('white-pixel')) return;
+
+    // 1x1 흰색 픽셀
+    const pixelGraphics = this.add.graphics();
+    pixelGraphics.fillStyle(0xffffff, 1);
+    pixelGraphics.fillRect(0, 0, 1, 1);
+    pixelGraphics.generateTexture('white-pixel', 1, 1);
+    pixelGraphics.destroy();
+
+    // 둥근 모서리 바 배경 (50x6)
+    const barBgGraphics = this.add.graphics();
+    barBgGraphics.fillStyle(0x333333, 1);
+    barBgGraphics.fillRoundedRect(0, 0, 50, 6, 3);
+    barBgGraphics.generateTexture('dash-bar-bg', 50, 6);
+    barBgGraphics.destroy();
+
+    // 둥근 모서리 바 진행률 (50x6)
+    const barFillGraphics = this.add.graphics();
+    barFillGraphics.fillStyle(0xffffff, 1);
+    barFillGraphics.fillRoundedRect(0, 0, 50, 6, 3);
+    barFillGraphics.generateTexture('dash-bar-fill', 50, 6);
+    barFillGraphics.destroy();
   }
 
   // [1.4.7] createBigGridTexture, createBorderTexture 삭제됨 (성능 최적화: TileSprite/Graphics 직접 사용)

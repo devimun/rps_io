@@ -272,11 +272,27 @@ export class PlayerRenderer {
     const crownText = container.getData('crownText') as Phaser.GameObjects.Text;
     crownText.setVisible(false);
 
-    // 대시바 (내 플레이어만) - 풀에서 가져온 경우 추가 필요할 수 있음
-    if (isMe && !container.getData('dashBar')) {
-      const dashBar = this.scene.add.graphics();
-      container.add(dashBar);
-      container.setData('dashBar', dashBar);
+    // [1.4.8] 대시바 (내 플레이어만) - Image 기반으로 변경 (texImage2D 방지)
+    if (isMe && !container.getData('dashBarBg')) {
+      // 배경 바 (회색)
+      const dashBarBg = this.scene.add.image(0, player.size + 20, 'dash-bar-bg');
+      dashBarBg.setOrigin(0.5, 0);
+      dashBarBg.setAlpha(0.8);
+      container.add(dashBarBg);
+      container.setData('dashBarBg', dashBarBg);
+
+      // 진행률 바 (scale로 너비 조절, tint로 색상 변경)
+      const dashBarFill = this.scene.add.image(-25, player.size + 20, 'dash-bar-fill');
+      dashBarFill.setOrigin(0, 0);
+      container.add(dashBarFill);
+      container.setData('dashBarFill', dashBarFill);
+
+      // 테두리 (1회만 그림)
+      const dashBarBorder = this.scene.add.graphics();
+      dashBarBorder.lineStyle(1, 0xffffff, 0.5);
+      dashBarBorder.strokeRoundedRect(-25, player.size + 20, 50, 6, 3);
+      container.add(dashBarBorder);
+      container.setData('dashBarBorder', dashBarBorder);
 
       const boostText = this.scene.add.text(0, player.size + 32, 'BOOST', {
         fontSize: '10px',
@@ -559,8 +575,8 @@ export class PlayerRenderer {
   }
 
   /**
-   * 대시바 그리기 (플레이어 아래에 표시)
-   * 성능 최적화: 상태 변경 시에만 다시 그림
+   * [1.4.8] 대시바 업데이트 (Image 기반 - texImage2D 방지)
+   * Graphics.clear() 대신 scaleX/tint로 업데이트
    */
   private drawDashBar(
     container: Phaser.GameObjects.Container,
@@ -568,13 +584,14 @@ export class PlayerRenderer {
     isDashing: boolean,
     dashCooldownEndTime: number
   ): void {
-    const dashBar = container.getData('dashBar') as Phaser.GameObjects.Graphics;
+    const dashBarBg = container.getData('dashBarBg') as Phaser.GameObjects.Image;
+    const dashBarFill = container.getData('dashBarFill') as Phaser.GameObjects.Image;
+    const dashBarBorder = container.getData('dashBarBorder') as Phaser.GameObjects.Graphics;
     const boostText = container.getData('boostText') as Phaser.GameObjects.Text;
-    if (!dashBar) return;
 
-    // const { isDashing, dashCooldownEndTime } = useGameStore.getState(); // [1.4.7] 제거됨
-    const barWidth = 50;
-    const barHeight = 6;
+    // Image 기반 대시바가 없으면 리턴 (기존 Graphics 방식 호환)
+    if (!dashBarFill) return;
+
     const barY = size + 20;
 
     // 쿨다운 진행률 계산
@@ -589,7 +606,21 @@ export class PlayerRenderer {
     // 상태 캐싱: 변경 없으면 스킵
     const lastProgress = container.getData('lastDashProgress') as number | undefined;
     const lastIsDashing = container.getData('lastIsDashing') as boolean | undefined;
+    const lastBarY = container.getData('lastBarY') as number | undefined;
     const progressRounded = Math.round(progress * 20) / 20; // 5% 단위로 반올림
+
+    // 위치 업데이트 (크기 변경 시)
+    if (lastBarY !== barY) {
+      container.setData('lastBarY', barY);
+      dashBarBg?.setY(barY);
+      dashBarFill?.setY(barY);
+      // 테두리는 Graphics라서 재생성 필요 (하지만 크기 변경은 드물어서 괜찮음)
+      if (dashBarBorder) {
+        dashBarBorder.clear();
+        dashBarBorder.lineStyle(1, 0xffffff, 0.5);
+        dashBarBorder.strokeRoundedRect(-25, barY, 50, 6, 3);
+      }
+    }
 
     if (lastProgress === progressRounded && lastIsDashing === isDashing) {
       // 위치만 업데이트
@@ -600,29 +631,21 @@ export class PlayerRenderer {
     container.setData('lastDashProgress', progressRounded);
     container.setData('lastIsDashing', isDashing);
 
-    dashBar.clear();
+    // 진행률 바 업데이트 (scaleX로 너비 조절)
+    const clampedProgress = Math.min(1, Math.max(0, progress));
+    dashBarFill.setScale(clampedProgress, 1);
 
-    // 배경 바
-    dashBar.fillStyle(0x333333, 0.8);
-    dashBar.fillRoundedRect(-barWidth / 2, barY, barWidth, barHeight, 3);
-
-    // 진행률 바
-    const fillWidth = barWidth * Math.min(1, Math.max(0, progress));
+    // 색상 변경 (tint)
     if (isDashing) {
       // 대시 중: 노란색
-      dashBar.fillStyle(0xffcc00, 1);
+      dashBarFill.setTint(0xffcc00);
     } else if (progress >= 1) {
       // 준비 완료: 초록색
-      dashBar.fillStyle(0x44ff44, 1);
+      dashBarFill.setTint(0x44ff44);
     } else {
       // 충전 중: 파란색
-      dashBar.fillStyle(0x4488ff, 1);
+      dashBarFill.setTint(0x4488ff);
     }
-    dashBar.fillRoundedRect(-barWidth / 2, barY, fillWidth, barHeight, 3);
-
-    // 테두리
-    dashBar.lineStyle(1, 0xffffff, 0.5);
-    dashBar.strokeRoundedRect(-barWidth / 2, barY, barWidth, barHeight, 3);
 
     // BOOST 텍스트 업데이트
     if (boostText) {
