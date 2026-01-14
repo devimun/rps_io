@@ -6,10 +6,20 @@ import { useState } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { t } from '../../utils/i18n';
 
+/** 튜토리얼 Props */
+interface TutorialProps {
+  /** 시작 버튼 클릭 핸들러 (외부에서 제공) */
+  onStart?: () => void;
+  /** 취소 핸들러 (외부에서 제공) */
+  onCancel?: () => void;
+  /** 게임 시작 전 튜토리얼인지 여부 */
+  isPreGame?: boolean;
+}
+
 /**
  * 튜토리얼 컴포넌트
  */
-export function Tutorial() {
+export function Tutorial({ onStart, onCancel: _onCancel, isPreGame: _isPreGame = false }: TutorialProps) {
   const { language, isMobile, dismissTutorial, setShowTutorial } = useUIStore();
   const [dontShowAgain, setDontShowAgain] = useState(false);
 
@@ -17,7 +27,13 @@ export function Tutorial() {
   const handleStart = () => {
     if (dontShowAgain) {
       dismissTutorial();
+    }
+
+    // 외부 핸들러가 있으면 호출 (게임 시작 전)
+    if (onStart) {
+      onStart();
     } else {
+      // 기존 동작 (게임 중 튜토리얼)
       setShowTutorial(false);
     }
   };
@@ -35,17 +51,22 @@ export function Tutorial() {
           <TutorialRule
             icon="✂️"
             text={t('tutorial.rule1', language)}
-            description="가위는 보를, 보는 바위를, 바위는 가위를 이깁니다"
+            description={language === 'ko' ? '가위는 보를, 보는 바위를, 바위는 가위를 이깁니다' : 'Scissors beats Paper, Paper beats Rock, Rock beats Scissors'}
           />
           <TutorialRule
             icon="📈"
-            text={t('tutorial.rule3', language)}
-            description="킬이 많을수록 캐릭터가 커집니다"
+            text={t('tutorial.rule2', language)}
+            description={language === 'ko' ? '상대를 잡을수록 캐릭터가 커집니다' : 'You grow bigger as you catch more opponents'}
           />
           <TutorialRule
             icon="🔄"
             text={t('tutorial.rule4', language)}
-            description="모든 플레이어가 동시에 변신합니다"
+            description={language === 'ko' ? '주기적으로 가위/바위/보 상태가 바뀝니다' : 'Your Rock/Paper/Scissors state changes periodically'}
+          />
+          <TutorialRule
+            icon="🚀"
+            text={t('tutorial.rule5', language)}
+            description={language === 'ko' ? '빠르게 도망치거나 추격할 때 사용하세요' : 'Use it to escape or chase quickly'}
           />
         </ul>
 
@@ -54,7 +75,7 @@ export function Tutorial() {
           <div className="bg-slate-700/50 rounded-lg p-3 mb-6 border border-cyan-500/30">
             <p className="text-cyan-400 text-sm font-medium flex items-center gap-2">
               <span>💻</span>
-              {language === 'ko' 
+              {language === 'ko'
                 ? 'PC에서 플레이하면 미니맵, 킬로그 등 더 많은 기능을 즐길 수 있습니다!'
                 : 'Play on PC for minimap, kill feed, and better performance!'}
             </p>

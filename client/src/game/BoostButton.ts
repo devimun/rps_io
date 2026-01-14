@@ -38,8 +38,8 @@ export class BoostButton {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.onBoost = onBoost;
 
-    // 고정 위치 (화면 우하단)
-    const padding = 30;
+    // 고정 위치 (화면 우하단 - 더 가깝게)
+    const padding = 15;
     const x = scene.cameras.main.width - padding - this.config.radius;
     const y = scene.cameras.main.height - padding - this.config.radius;
 
@@ -66,8 +66,8 @@ export class BoostButton {
     this.buttonText.setOrigin(0.5);
     this.container.add(this.buttonText);
 
-    // 터치 이벤트
-    this.setupInput(x, y);
+    // 터치 이벤트는 MainScene에서 통합 관리
+    // this.setupInput(x, y);
   }
 
   /**
@@ -83,7 +83,8 @@ export class BoostButton {
   }
 
   /**
-   * 쿨다운 오버레이 그리기
+   * 쿨다운 오버레이 그리기 (차오르는 원형 효과)
+   * progress: 0 = 쿨다운 시작, 1 = 사용 가능
    */
   private drawCooldown(progress: number): void {
     const { radius } = this.config;
@@ -91,26 +92,31 @@ export class BoostButton {
 
     if (progress <= 0 || progress >= 1) return;
 
-    // 쿨다운 진행률에 따라 원형 오버레이
-    this.cooldownOverlay.fillStyle(0x000000, 0.5);
-    this.cooldownOverlay.slice(0, 0, radius, -Math.PI / 2, -Math.PI / 2 + (1 - progress) * Math.PI * 2, true);
-    this.cooldownOverlay.fillPath();
+    // 쿨다운 진행률에 따라 원형 둘레가 차오르는 효과
+    // 아래에서 시작해서 시계 방향으로 차오름
+    const startAngle = Math.PI / 2; // 아래에서 시작
+    const endAngle = startAngle - progress * Math.PI * 2; // 시계 방향으로 차오름
+
+    // 차오르는 원형 테두리 (밝은 색상으로 눈에 띄게)
+    this.cooldownOverlay.lineStyle(6, 0x4ecdc4, 1); // 청록색
+    this.cooldownOverlay.beginPath();
+    this.cooldownOverlay.arc(0, 0, radius - 3, startAngle, endAngle, true);
+    this.cooldownOverlay.strokePath();
   }
 
   /**
-   * 입력 이벤트 설정
+   * 해당 좌표가 버튼 영역 내인지 확인
    */
-  private setupInput(centerX: number, centerY: number): void {
-    this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      const dx = pointer.x - centerX;
-      const dy = pointer.y - centerY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+  public contains(x: number, y: number): boolean {
+    const padding = 15;
+    const centerX = this.scene.cameras.main.width - padding - this.config.radius;
+    const centerY = this.scene.cameras.main.height - padding - this.config.radius;
 
-      // 버튼 영역 내 터치
-      if (distance <= this.config.radius * 1.3) {
-        this.onBoost();
-      }
-    });
+    const dx = x - centerX;
+    const dy = y - centerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    return distance <= this.config.radius * 1.3;
   }
 
   /**

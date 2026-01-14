@@ -2,11 +2,12 @@
  * 로비 화면 컴포넌트
  * 게임 시작 전 방 생성/입장 UI를 제공합니다.
  */
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, memo, useCallback } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { useGameStore } from '../../stores/gameStore';
 import { t } from '../../utils/i18n';
 import { VersionInfo } from './VersionInfo';
+import { Tutorial } from './Tutorial';
 
 import { SupportButton } from './SupportButton';
 import {
@@ -27,6 +28,9 @@ interface LobbyProps {
   initialRoomCode?: string | null;
 }
 
+/** 대기 중인 시작 액션 타입 */
+type PendingStartAction = 'quick' | 'create' | 'join' | null;
+
 /**
  * 로비 컴포넌트
  */
@@ -36,6 +40,7 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
   const setSavedNickname = useUIStore((state) => state.setSavedNickname);
   const setLoading = useUIStore((state) => state.setLoading);
   const setError = useUIStore((state) => state.setError);
+  const tutorialDismissed = useUIStore((state) => state.tutorialDismissed);
 
   // selector 패턴: 각 상태 변경시에만 리렌더링
   const setRoomInfo = useGameStore((state) => state.setRoomInfo);
@@ -46,6 +51,10 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
   const [fillWithBots, setFillWithBots] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
+
+  // 튜토리얼 표시 상태 및 대기 중인 액션
+  const [showTutorialBeforeStart, setShowTutorialBeforeStart] = useState(false);
+  const [pendingStartAction, setPendingStartAction] = useState<PendingStartAction>(null);
 
   /** URL에서 방 코드가 있으면 자동으로 코드 입장 모달 열기 */
   useEffect(() => {
@@ -60,13 +69,8 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
   /** 닉네임 유효성 검사 */
   const isValidNickname = /^[a-zA-Z0-9]{1,12}$/.test(nickname);
 
-  /** 바로 시작 (공개 방 매칭) */
-  const handleQuickStart = async () => {
-    if (!isValidNickname) {
-      setError(t('error.invalidNickname', language));
-      return;
-    }
-
+  /** 실제 빠른 시작 로직 */
+  const executeQuickStart = useCallback(async () => {
     setLoading(true, t('common.loading', language));
     setSavedNickname(nickname);
     trackRoomJoinAttempt('quick');
@@ -83,12 +87,29 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
       const data = await response.json();
       trackRoomJoinSuccess('public');
       setRoomInfo(data.roomId, data.code || '', data.playerId, nickname);
-      setPhase('playing');
+      setPhase('loading');
     } catch (error) {
       setError(t('error.connectionFailed', language));
       if (error instanceof Error) trackError(error, 'quick_join');
     } finally {
       setLoading(false);
+    }
+  }, [language, nickname, setLoading, setSavedNickname, setRoomInfo, setPhase, setError]);
+
+  /** 바로 시작 (공개 방 매칭) */
+  const handleQuickStart = async () => {
+    if (!isValidNickname) {
+      setError(t('error.invalidNickname', language));
+      return;
+    }
+
+    // 튜토리얼을 이미 본 경우 바로 시작
+    if (tutorialDismissed) {
+      executeQuickStart();
+    } else {
+      // 튜토리얼을 보여주고 대기
+      setPendingStartAction('quick');
+      setShowTutorialBeforeStart(true);
     }
   };
 
@@ -123,7 +144,7 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
       // GA4: 방 생성 성공 추적
       trackRoomCreateSuccess('private', data.code);
 
-      setPhase('playing');
+      setPhase('loading');
     } catch (error) {
       setError(t('error.connectionFailed', language));
       if (error instanceof Error) trackError(error, 'create_room');
@@ -168,7 +189,7 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
       window.history.replaceState({}, '', url.toString());
 
       setRoomInfo(data.roomId, roomCode.toUpperCase(), data.playerId, nickname, true); // 사설방 (코드 입장)
-      setPhase('playing');
+      setPhase('loading');
     } catch (err) {
       const message = err instanceof Error ? err.message : t('error.roomNotFound', language);
       setError(message);
@@ -178,8 +199,28 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
     }
   };
 
+  /** 튜토리얼에서 시작하기 클릭 시 */
+  const handleTutorialStart = () => {
+    setShowTutorialBeforeStart(false);
+
+    // 대기 중인 액션 실행
+    if (pendingStartAction === 'quick') {
+      executeQuickStart();
+    }
+    // create, join은 모달에서 바로 처리하므로 여기서는 quick만 처리
+    setPendingStartAction(null);
+  };
+
+  /** 튜토리얼 취소 */
+  const handleTutorialCancel = () => {
+    setShowTutorialBeforeStart(false);
+    setPendingStartAction(null);
+  };
+
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col items-center justify-center p-4 relative">
+    <main className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col items-center p-4 overflow-y-auto">
+      {/* 상단 여백 (중앙 정렬 대용) */}
+      <div className="flex-1 min-h-[5vh]" />
       {/* 타이틀 */}
       <header className="text-center mb-8">
         <h1 className="text-5xl font-bold text-white mb-2">{t('lobby.title', language)}</h1>
@@ -320,8 +361,18 @@ export const Lobby = memo(function Lobby({ initialRoomCode }: LobbyProps) {
         </div>
       )}
 
-      {/* 하단: 버전 정보 (위치 조정) */}
-      <footer className="absolute bottom-8 left-1/2 -translate-x-1/2">
+      {/* 튜토리얼 모달 (게임 시작 전) */}
+      {showTutorialBeforeStart && (
+        <Tutorial
+          onStart={handleTutorialStart}
+          onCancel={handleTutorialCancel}
+          isPreGame={true}
+        />
+      )}
+
+      {/* 하단 여백 + 버전 정보 (스크롤 콘텐츠에 포함) */}
+      <div className="flex-1 min-h-[5vh]" />
+      <footer className="pb-8">
         <VersionInfo />
       </footer>
     </main>

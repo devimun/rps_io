@@ -14,6 +14,7 @@ import { socketService } from '../../services/socketService';
 import type { Player } from '@chaos-rps/shared';
 import { WORLD_SIZE } from '@chaos-rps/shared';
 import { PlayerRenderer } from '../PlayerRenderer';
+import { BoostButton } from '../BoostButton';
 
 /** 씬 키 상수 */
 export const SCENE_KEYS = {
@@ -52,13 +53,32 @@ export class MainScene extends Phaser.Scene {
   private playerRenderer!: PlayerRenderer;
 
   private currentAngle = 0;
-  private lastTapTime = 0;
   private isGameReady = false;
+  /** 모바일 부스터 버튼 */
+  private boostButton?: BoostButton;
 
   /** 로딩 UI */
+  private loadingOverlay?: Phaser.GameObjects.Graphics; // [1.4.8] 전체 화면 오버레이
   private loadingText?: Phaser.GameObjects.Text;
   private loadingBar?: Phaser.GameObjects.Graphics;
   private loadingBarBg?: Phaser.GameObjects.Graphics;
+
+  /** [1.4.7] Store 구독 해제 함수 */
+  private unsubscribe?: () => void;
+  private unsubscribeUI?: () => void;
+  private unsubscribePhase?: () => void;
+
+  /** [1.4.7] 임시 벡터 (GC 방지용) */
+  private tempVector = new Phaser.Math.Vector2();
+
+  /** [1.4.7] 에셋 로딩 완료 여부 */
+  private isAssetsLoaded = false;
+  /** [1.4.7] 게임 초기화 완료 여부 (중복 초기화 방지) */
+  private isGameInitialized = false;
+  /** [1.4.8] 로딩 완료 처리 중 여부 (중복 호출 방지) */
+  private isLoadingCompleteTriggered = false;
+  /** [1.4.7] 로딩 진행률 (0.0 ~ 1.0) */
+  private loadingProgress = 0;
   private poolCreated = 0;
   private readonly POOL_TARGET = 25;
   /** [1.4.5] 최소 로딩 시간 (1초) */
@@ -73,12 +93,21 @@ export class MainScene extends Phaser.Scene {
   private cachedPlayers: Map<string, Player> = new Map();
   private cachedMyPlayer: Player | null = null;
   private cachedIsMobile = false;
-  private lastStoreCheckTime = 0;
-  /** [1.4.5] Store 캐싱 주기 증가 (16ms → 32ms) */
-  private readonly STORE_CHECK_INTERVAL = 32;
+
+  /** [1.4.7] 추가 캐싱 상태 (Game Loop 최적화) */
+  private cachedRankings: any[] = []; // TODO: 타입 정의
+  private cachedIsDashing = false;
+  private cachedDashCooldownEndTime = 0;
+
+
 
   constructor() {
     super({ key: SCENE_KEYS.MAIN });
+  }
+
+  init(): void {
+    this.loadingStartTime = Date.now();
+    console.log('[MainScene] Init - Loading Start Time:', this.loadingStartTime);
   }
 
   create(): void {
@@ -89,43 +118,201 @@ export class MainScene extends Phaser.Scene {
     // 배경색
     this.cameras.main.setBackgroundColor('#1a1a2e');
 
-    // 로딩 UI 생성
+    // [1.4.7] Store 구독 (Polling 제거)
+    this.unsubscribe = useGameStore.subscribe((state) => {
+      this.cachedPlayers = state.players;
+      this.cachedMyPlayer = state.myPlayer;
+      this.cachedRankings = state.rankings;
+      this.cachedIsDashing = state.isDashing;
+      this.cachedDashCooldownEndTime = state.dashCooldownEndTime;
+
+      if (this.cachedMyPlayer) {
+        this.isGameReady = true;
+        this.checkReadyToStart();
+      }
+    });
+
+    this.unsubscribeUI = useUIStore.subscribe((state) => {
+      this.cachedIsMobile = state.isMobile;
+    });
+
+    // 초기 상태 동기화
+    const gameState = useGameStore.getState();
+    const uiState = useUIStore.getState();
+    this.cachedPlayers = gameState.players;
+    this.cachedMyPlayer = gameState.myPlayer;
+    this.cachedRankings = gameState.rankings;
+    this.cachedIsDashing = gameState.isDashing;
+    this.cachedDashCooldownEndTime = gameState.dashCooldownEndTime;
+
+    if (this.cachedMyPlayer) {
+      this.isGameReady = true;
+    }
+
+    this.cachedIsMobile = uiState.isMobile;
+
+    // 로딩 UI 생성 (처음엔 숨김)
+    this.createLoadingUI(centerX, centerY);
+
+    // [1.4.7] 게임 로딩('loading') 감지하여 로딩 시작
+    let lastPhase = useGameStore.getState().phase;
+    this.unsubscribePhase = useGameStore.subscribe((state) => {
+      if (state.phase !== lastPhase) {
+        const prevPhase = lastPhase;
+        lastPhase = state.phase;
+
+        // [1.4.7] 로비/IDLE 상태로 돌아오면 로딩 플래그 리셋 (다음 게임 로딩 준비)
+        if (state.phase === 'lobby' || state.phase === 'idle') {
+          this.isAssetsLoaded = false;
+          useGameStore.getState().setSceneReady(false);
+        }
+
+        // [1.4.8] loading 상태로 진입 시 로딩 시작
+        // 이전 phase가 idle/lobby/dead가 아니더라도 loading으로 오면 isAssetsLoaded 리셋
+        if (state.phase === 'loading') {
+          // 첫 로딩이 아닌 경우(재시작) isAssetsLoaded 리셋 필요
+          if (prevPhase !== 'idle' && this.isGameInitialized) {
+            console.log('[MainScene] Re-entering loading phase, resetting...');
+            this.isAssetsLoaded = false;
+          }
+          if (!this.isAssetsLoaded) {
+            this.startLoadingProcess();
+          }
+        }
+      }
+    });
+
+    // 이미 loading 상태라면 즉시 시작 (재진입 등)
+    if (useGameStore.getState().phase === 'loading' && !this.isAssetsLoaded) {
+      this.startLoadingProcess();
+    }
+  }
+
+  /** [1.4.7] 로딩 UI 생성 및 초기화 */
+  private createLoadingUI(centerX: number, centerY: number): void {
+    const { width, height } = this.cameras.main;
+
+    // [1.4.8] 전체 화면 오버레이 (게임 콘텐츠를 완전히 가림)
+    // setScrollFactor(0)으로 카메라에 고정하여 항상 화면을 덮도록 함
+    this.loadingOverlay = this.add.graphics();
+    this.loadingOverlay.fillStyle(0x1a1a2e, 1); // 배경색과 동일
+    this.loadingOverlay.fillRect(-width, -height, width * 4, height * 4); // 충분히 크게
+    this.loadingOverlay.setScrollFactor(0); // 카메라에 고정
+    this.loadingOverlay.setDepth(9998);
+    this.loadingOverlay.setVisible(false);
+
     this.loadingBarBg = this.add.graphics();
     this.loadingBarBg.fillStyle(0x333333, 1);
     this.loadingBarBg.fillRect(centerX - 150, centerY, 300, 20);
-    this.loadingBarBg.setDepth(100);
+    this.loadingBarBg.setScrollFactor(0); // 카메라에 고정
+    this.loadingBarBg.setDepth(9999);
+    this.loadingBarBg.setVisible(false);
 
     this.loadingBar = this.add.graphics();
-    this.loadingBar.setDepth(100);
+    this.loadingBar.setScrollFactor(0); // 카메라에 고정
+    this.loadingBar.setDepth(9999);
+    this.loadingBar.setVisible(false);
 
-    this.loadingText = this.add.text(centerX, centerY + 50, '에셋 로딩 중...', {
+    this.loadingText = this.add.text(centerX, centerY + 50, '게임 준비 중...', {
       fontSize: '18px',
       fontFamily: 'Arial, sans-serif',
       color: '#aaaaaa',
-    }).setOrigin(0.5).setDepth(100);
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(9999); // 카메라에 고정
+    this.loadingText.setVisible(false);
 
     // 로딩 이벤트
     this.load.on('progress', this.onLoadProgress, this);
     this.load.on('complete', this.onAssetsLoaded, this);
+  }
 
-    // [1.4.5] 로딩 시작 시간 기록
+  /** [1.4.7] 로딩 프로세스 시작 */
+  private startLoadingProcess(): void {
+    console.log('[MainScene] Start Loading Process...');
+    this.isAssetsLoaded = true;
+    this.isLoadingCompleteTriggered = false; // [1.4.8] 플래그 리셋
+    this.poolCreated = 0; // [1.4.8] 풀 생성 카운트 리셋 (재시작 시 100% 초과 방지)
+    this.loadingProgress = 0; // 진행률 리셋
     this.loadingStartTime = Date.now();
 
-    // 에셋 로딩 시작
+
+    // UI 표시
+    this.loadingOverlay?.setVisible(true); // [1.4.8] 전체 화면 오버레이
+    this.loadingBarBg?.setVisible(true);
+    this.loadingBar?.setVisible(true);
+    this.loadingText?.setVisible(true);
+    this.loadingText?.setText('에셋 로딩 중...');
+
+    // [1.4.7] 이미 게임이 초기화되어 있다면 가짜 로딩(연출)만 실행하여 낭비 방지
+    if (this.isGameInitialized) {
+      console.log('[MainScene] Game already initialized, running fake loading...');
+      this.runFakeLoadingSequence();
+      return;
+    }
+
+    // 에셋 로딩 시작 (처음인 경우)
     this.loadAssets();
+  }
+
+  /** [1.4.7] 재진입 시 연출용 가짜 로딩 */
+  private runFakeLoadingSequence(): void {
+    this.loadingProgress = 0;
+    // 0.5초 동안 로딩 바 채우기 (사용자 경험 + 부드러운 전환)
+    this.time.addEvent({
+      delay: 25,
+      repeat: 19, // 20번 실행 (초기 1회 + repeat 19회) → 0.05 * 20 = 1.0 (100%)
+      callback: () => {
+        this.loadingProgress += 0.05;
+        this.onLoadProgress(this.loadingProgress);
+        if (this.loadingProgress >= 0.99) {
+          this.loadingProgress = 1;
+          this.checkReadyToStart();
+        }
+      }
+    });
+  }
+
+  /** [1.4.7] 로딩 및 데이터 수신 완료 체크 */
+  private checkReadyToStart(): void {
+    // [1.4.8] 이미 로딩 완료 처리 중이면 무시
+    if (this.isLoadingCompleteTriggered) return;
+
+    // 로딩이 완료되었고, 게임 데이터(내 플레이어)도 수신했다면
+    if (this.loadingProgress >= 1 && this.isGameReady) {
+      // 로딩바가 켜져있을 때만 완료 처리 (중복 실행 방지)
+      if (this.loadingBarBg?.visible) {
+        this.isLoadingCompleteTriggered = true;
+        this.onLoadingComplete();
+      }
+    } else if (this.loadingProgress >= 1 && !this.isGameReady) {
+      // 로딩은 끝났는데 데이터가 아직 안 옴
+      this.loadingText?.setText('서버 접속 중...');
+    }
   }
 
   /** 에셋 로딩 */
   private loadAssets(): void {
+    // 이미 로드되어 있다면 바로 완료 처리
+    if (this.textures.exists('rps-sprites')) {
+      console.log('[MainScene] Assets already loaded, skipping...');
+      this.onAssetsLoaded();
+      return;
+    }
+
+    this.loadingProgress = 0;
     this.load.spritesheet('rps-sprites', '/assets/images/rps.png', {
       frameWidth: 128,
       frameHeight: 128,
     });
+    // 눈 전용 원형 텍스처
+    this.load.image('circle', '/assets/images/circle.png');
+    // Slither.io 스타일 광택 텍스처 (본체 전용)
+    this.load.image('slither-body', '/assets/images/slither_body.png');
     this.load.start();
   }
 
   /** 로딩 진행률 업데이트 */
   private onLoadProgress(progress: number): void {
+    this.loadingProgress = progress;
     const { width, height } = this.cameras.main;
     const centerX = width / 2;
     const centerY = height / 2;
@@ -134,14 +321,14 @@ export class MainScene extends Phaser.Scene {
     this.loadingBar?.fillStyle(0x4ecdc4, 1);
     this.loadingBar?.fillRect(centerX - 148, centerY + 2, 296 * progress * 0.3, 16);
 
-    this.loadingText?.setText(`에셋 로딩 중... ${Math.floor(progress * 30)}%`);
+    this.loadingText?.setText(`에셋 로딩 중... ${Math.floor(progress * 100)}%`);
   }
 
   /** 에셋 로딩 완료 → 텍스처 생성 */
   private onAssetsLoaded(): void {
-    this.loadingText?.setText('텍스처 생성 중... 30%');
-
-    // 다음 프레임에서 텍스처 생성 (프레임 드랍 방지)
+    this.loadingProgress = 1;
+    this.loadingText?.setText('텍스처 생성 중... 100%');
+    // 다음 프레임에서 텍스처 생성
     requestAnimationFrame(() => this.createTexturesProgressively());
   }
 
@@ -151,24 +338,17 @@ export class MainScene extends Phaser.Scene {
     const centerX = width / 2;
     const centerY = height / 2;
 
-    // Step 1: 그리드 타일
+    // Step 1: 그리드 타일 (패턴용 작은 텍스처)
     this.createGridTile();
-    this.updateLoadingBar(centerX, centerY, 0.4, '그리드 생성 중... 40%');
+    this.updateLoadingBar(centerX, centerY, 0.4, '게임 리소스 생성 중... 40%');
 
     requestAnimationFrame(() => {
-      // Step 2: 큰 그리드
-      this.createBigGridTexture();
-      this.updateLoadingBar(centerX, centerY, 0.5, '월드 생성 중... 50%');
+      // Step 2: Pool 생성 준비 (초대형 텍스처 생성 제거로 바로 넘어감)
+      this.updateLoadingBar(centerX, centerY, 0.6, '게임 환경 구성 중... 60%');
 
-      requestAnimationFrame(() => {
-        // Step 3: 경계선
-        this.createBorderTexture();
-        this.updateLoadingBar(centerX, centerY, 0.6, '월드 생성 완료... 60%');
-
-        // Pool 생성 시작
-        this.playerRenderer = new PlayerRenderer(this);
-        this.startPoolCreation();
-      });
+      // Pool 생성 시작
+      this.playerRenderer = new PlayerRenderer(this);
+      this.startPoolCreation();
     });
   }
 
@@ -176,7 +356,8 @@ export class MainScene extends Phaser.Scene {
   private startPoolCreation(): void {
     const createOne = () => {
       if (this.poolCreated >= this.POOL_TARGET) {
-        this.onLoadingComplete();
+        this.loadingProgress = 1;
+        this.checkReadyToStart();
         return;
       }
 
@@ -186,6 +367,8 @@ export class MainScene extends Phaser.Scene {
 
       // 진행률 업데이트
       const progress = 0.6 + (this.poolCreated / this.POOL_TARGET) * 0.4;
+      this.loadingProgress = progress; // [1.4.7] 진행률 동기화
+
       const { width, height } = this.cameras.main;
       this.updateLoadingBar(width / 2, height / 2, progress,
         `게임 준비 중... ${Math.floor(progress * 100)}%`);
@@ -208,18 +391,40 @@ export class MainScene extends Phaser.Scene {
   /** 모든 로딩 완료 */
   private onLoadingComplete(): void {
     // [1.4.5] 최소 1초 로딩 시간 보장
-    const elapsed = Date.now() - this.loadingStartTime;
+    const now = Date.now();
+    const elapsed = now - this.loadingStartTime;
     const remaining = Math.max(0, this.MIN_LOADING_TIME - elapsed);
+
+    console.log(`[MainScene] Loading Complete. Elapsed: ${elapsed}ms, Remaining Wait: ${remaining}ms, MinTime: ${this.MIN_LOADING_TIME}ms`);
 
     this.loadingText?.setText('완료!');
 
     // 로딩 UI 제거 + 게임 초기화
     this.time.delayedCall(200 + remaining, () => {
-      this.loadingText?.destroy();
-      this.loadingBar?.destroy();
-      this.loadingBarBg?.destroy();
+      this.loadingOverlay?.setVisible(false); // [1.4.8] 오버레이 숨김
+      this.loadingText?.setVisible(false);
+      this.loadingBar?.setVisible(false);
+      this.loadingBarBg?.setVisible(false);
 
-      this.initializeGame();
+      if (!this.isGameInitialized) {
+        this.initializeGame();
+        this.isGameInitialized = true;
+      }
+
+      // [1.4.7] 씬 로딩 완료 플래그 설정
+      useGameStore.getState().setSceneReady(true);
+      console.log('[MainScene] Scene ready, isSceneReady = true');
+
+      // [1.4.8] UI 준비 완료 대기 후 게임 시작
+      const waitForUI = () => {
+        if (useUIStore.getState().isUIReady) {
+          console.log('[MainScene] UI ready, transitioning to playing phase');
+          useGameStore.getState().setPhase('playing');
+        } else {
+          requestAnimationFrame(waitForUI);
+        }
+      };
+      waitForUI();
     });
   }
 
@@ -234,10 +439,15 @@ export class MainScene extends Phaser.Scene {
     // 물리, 카메라 설정
     this.physics.world.setBounds(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
     this.cameras.main.setBounds(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
-    this.cameras.main.setZoom(isTouchDevice ? 0.6 : 1.0);
+    this.cameras.main.setZoom(isTouchDevice ? 0.6 : 0.9);
 
     // 그리드 배치
     this.createGrid();
+
+    // 모바일 부스터 버튼 생성 (setupInput보다 먼저 생성해야 터치 감지 가능)
+    if (isTouchDevice) {
+      this.boostButton = new BoostButton(this, tryDash);
+    }
 
     // 입력 설정
     this.setupInput();
@@ -287,64 +497,50 @@ export class MainScene extends Phaser.Scene {
     graphics.destroy();
   }
 
-  private createBigGridTexture(): void {
-    const worldSize = WORLD_SIZE;
-    const gridSize = 500;
-    const graphics = this.add.graphics();
-
-    graphics.lineStyle(2, 0x2a3a5e, 0.8);
-    for (let x = 0; x <= worldSize; x += gridSize) {
-      graphics.moveTo(x, 0);
-      graphics.lineTo(x, worldSize);
-    }
-    for (let y = 0; y <= worldSize; y += gridSize) {
-      graphics.moveTo(0, y);
-      graphics.lineTo(worldSize, y);
-    }
-    graphics.strokePath();
-
-    graphics.generateTexture('big-grid', worldSize, worldSize);
-    graphics.destroy();
-  }
-
-  private createBorderTexture(): void {
-    const worldSize = WORLD_SIZE;
-    const graphics = this.add.graphics();
-
-    graphics.lineStyle(8, 0xff4444, 1);
-    graphics.strokeRect(0, 0, worldSize, worldSize);
-
-    graphics.generateTexture('world-border', worldSize, worldSize);
-    graphics.destroy();
-  }
+  // [1.4.7] createBigGridTexture, createBorderTexture 삭제됨 (성능 최적화: TileSprite/Graphics 직접 사용)
 
   //========================================
   // 그리드 배치
   //========================================
 
   private createGrid(): void {
-    const isMobile = useUIStore.getState().isMobile;
+    const isMobile = this.cachedIsMobile;
 
-    if (isMobile) {
-      if (this.textures.exists('big-grid')) {
-        this.add.image(WORLD_CONFIG.WIDTH / 2, WORLD_CONFIG.HEIGHT / 2, 'big-grid').setDepth(-10);
-      }
-    } else {
-      if (this.textures.exists('grid-tile')) {
-        this.add.tileSprite(WORLD_CONFIG.WIDTH / 2, WORLD_CONFIG.HEIGHT / 2,
-          WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT, 'grid-tile').setDepth(-10);
-      }
-      if (this.textures.exists('big-grid')) {
-        this.add.image(WORLD_CONFIG.WIDTH / 2, WORLD_CONFIG.HEIGHT / 2, 'big-grid')
-          .setDepth(-9).setAlpha(0.5);
-      }
+    if (this.textures.exists('grid-tile')) {
+      // [1.4.7] 성능 최적화: 4000x4000 텍스처 대신 500x500 패턴 반복 사용 (메모리 절약)
+      this.add.tileSprite(
+        WORLD_CONFIG.WIDTH / 2,
+        WORLD_CONFIG.HEIGHT / 2,
+        WORLD_CONFIG.WIDTH,
+        WORLD_CONFIG.HEIGHT,
+        'grid-tile'
+      ).setDepth(-10);
     }
 
-    if (this.textures.exists('world-border')) {
-      this.add.image(WORLD_CONFIG.WIDTH / 2, WORLD_CONFIG.HEIGHT / 2, 'world-border').setDepth(-8);
-    }
+    // [1.4.7] 성능 최적화: 경계선은 텍스처 대신 Graphics로 직접 그리기
+    const border = this.add.graphics();
+    border.lineStyle(8, 0xff4444, 1);
+    border.strokeRect(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
+    border.setDepth(-8);
 
     if (!isMobile) {
+      // 큰 그리드(big-grid) 대신 Graphics로 가볍게 그림
+      const bigGrid = this.add.graphics();
+      bigGrid.lineStyle(2, 0x2a3a5e, 0.5); // 투명도 낮춤
+      const worldSize = WORLD_SIZE;
+      const gridSize = 500;
+
+      for (let x = 0; x <= worldSize; x += gridSize) {
+        bigGrid.moveTo(x, 0);
+        bigGrid.lineTo(x, worldSize);
+      }
+      for (let y = 0; y <= worldSize; y += gridSize) {
+        bigGrid.moveTo(0, y);
+        bigGrid.lineTo(worldSize, y);
+      }
+      bigGrid.strokePath();
+      bigGrid.setDepth(-9);
+
       const warningZone = this.add.graphics();
       warningZone.fillStyle(0xff0000, 0.1);
       const w = 50;
@@ -361,33 +557,55 @@ export class MainScene extends Phaser.Scene {
 
   private setupInput(): void {
     const isTouchDevice = 'ontouchstart' in window;
-    const DOUBLE_TAP_THRESHOLD = 300;
 
+    // 포인터 다운 (이동 + PC 대시)
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      this.updateAngleFromPointer(pointer);
       if (isTouchDevice) {
-        const now = Date.now();
-        if (now - this.lastTapTime < DOUBLE_TAP_THRESHOLD) tryDash();
-        this.lastTapTime = now;
-      } else if (pointer.leftButtonDown()) {
-        tryDash();
+        // 모바일: 부스터 버튼 영역 터치 시 즉시 대시 실행
+        if (this.boostButton?.contains(pointer.x, pointer.y)) {
+          tryDash();
+          return; // 부스터 버튼 터치는 이동 조작으로 처리하지 않음
+        }
+        // 화면 전체에서 이동 조작 가능
+        this.updateAngleFromPointer(pointer);
+      } else {
+        // PC: 클릭 시 이동 + 좌클릭 대시
+        this.updateAngleFromPointer(pointer);
+        if (pointer.leftButtonDown()) {
+          tryDash();
+        }
       }
     });
 
+    // 포인터 이동 (방향 업데이트)
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      this.updateAngleFromPointer(pointer);
+      // 모바일: 부스터 버튼 영역은 이동 조작에서 제외
+      if (isTouchDevice && this.boostButton?.contains(pointer.x, pointer.y)) {
+        return;
+      }
+
+      // 터치 중이거나 마우스 이동 시
+      if (pointer.isDown || !isTouchDevice) {
+        this.updateAngleFromPointer(pointer);
+      }
     });
   }
 
+  /** [1.4.7] GC 최적화: Vector2 재사용 및 Store 호출 제거 */
   private updateAngleFromPointer(pointer: Phaser.Input.Pointer): void {
-    const myPlayer = this.cachedMyPlayer || useGameStore.getState().myPlayer;
+    const myPlayer = this.cachedMyPlayer;
     if (!myPlayer) return;
-    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    this.currentAngle = Math.atan2(worldPoint.y - myPlayer.y, worldPoint.x - myPlayer.x);
+
+    // getWorldPoint에 tempVector 전달하여 객체 생성 방지
+    this.cameras.main.getWorldPoint(pointer.x, pointer.y, this.tempVector);
+    this.currentAngle = Math.atan2(
+      this.tempVector.y - myPlayer.y,
+      this.tempVector.x - myPlayer.x
+    );
   }
 
   private sendCurrentDirection(): void {
-    const myPlayer = this.cachedMyPlayer || useGameStore.getState().myPlayer;
+    const myPlayer = this.cachedMyPlayer;
     if (!myPlayer) return;
     socketService.sendMove({
       angle: this.currentAngle,
@@ -400,17 +618,10 @@ export class MainScene extends Phaser.Scene {
   // 게임 루프
   //========================================
 
-  update(time: number): void {
+  update(_time: number): void {
     if (!this.isGameReady) return;
 
-    // Store 캐싱
-    if (time - this.lastStoreCheckTime > this.STORE_CHECK_INTERVAL) {
-      const state = useGameStore.getState();
-      this.cachedPlayers = state.players;
-      this.cachedMyPlayer = state.myPlayer;
-      this.cachedIsMobile = useUIStore.getState().isMobile;
-      this.lastStoreCheckTime = time;
-    }
+    // [1.4.7] Store Polling 제거 - Subscribe로 대체됨
 
     const players = this.cachedPlayers;
     const myPlayer = this.cachedMyPlayer;
@@ -418,8 +629,18 @@ export class MainScene extends Phaser.Scene {
     const myPlayerId = myPlayer?.id ?? null;
 
     const visiblePlayers = isMobile ? this.getVisiblePlayers(players, myPlayer) : players;
-    this.updatePlayerSpritesProgressive(visiblePlayers, myPlayerId, isMobile);
+    this.updatePlayerSpritesProgressive(
+      visiblePlayers,
+      myPlayerId,
+      isMobile,
+      this.cachedRankings,
+      this.cachedIsDashing,
+      this.cachedDashCooldownEndTime
+    );
     this.updateCamera(myPlayerId);
+
+    // 모바일 부스터 버튼 업데이트
+    this.boostButton?.update();
   }
 
   /** [1.4.5] 화면 내 플레이어 필터링 - sqrt 제거로 성능 개선 */
@@ -438,7 +659,14 @@ export class MainScene extends Phaser.Scene {
     return visiblePlayers;
   }
 
-  private updatePlayerSpritesProgressive(players: Map<string, Player>, myPlayerId: string | null, isMobile: boolean): void {
+  private updatePlayerSpritesProgressive(
+    players: Map<string, Player>,
+    myPlayerId: string | null,
+    isMobile: boolean,
+    rankings: any[],
+    isDashing: boolean,
+    dashCooldownEndTime: number
+  ): void {
     // 제거
     this.playerSprites.forEach((container, id) => {
       if (!players.has(id)) {
@@ -485,7 +713,18 @@ export class MainScene extends Phaser.Scene {
     // 업데이트
     players.forEach((player, id) => {
       const container = this.playerSprites.get(id);
-      if (container) this.playerRenderer.updateSprite(container, player, id === myPlayerId, isMobile);
+      if (container) {
+        this.playerRenderer.updateSprite(
+          container,
+          player,
+          id === myPlayerId,
+          isMobile,
+          rankings,
+          isDashing,
+          dashCooldownEndTime,
+          this.currentAngle  // [1.4.7] 눈동자 마우스 추적용
+        );
+      }
     });
   }
 
@@ -496,6 +735,11 @@ export class MainScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    // [1.4.7] 구독 해제
+    this.unsubscribe?.();
+    this.unsubscribeUI?.();
+    this.unsubscribePhase?.();
+
     this.playerSprites.forEach((sprite) => sprite.destroy());
     this.playerSprites.clear();
     this.pendingPlayers.clear();

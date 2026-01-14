@@ -10,7 +10,7 @@ import { addSnapshot, removePlayerBuffer, clearAllBuffers, cleanStaleBuffers } f
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 /** 게임 진행 상태 */
-export type GamePhase = 'idle' | 'lobby' | 'playing' | 'dead' | 'spectating';
+export type GamePhase = 'idle' | 'lobby' | 'loading' | 'playing' | 'dead' | 'spectating';
 
 /** 게임 스토어 상태 인터페이스 */
 interface GameState {
@@ -45,6 +45,9 @@ interface GameState {
   eliminatedRpsState: RPSState | null;
   deathMessage: string | null;
   finalKillCount: number; // 사망 시 킬 수
+
+  // [1.4.7] 씨 로딩 완료 상태
+  isSceneReady: boolean;
 }
 
 /** 게임 스토어 액션 인터페이스 */
@@ -71,6 +74,10 @@ interface GameActions {
   // 사망 관련
   setDeathInfo: (eliminatorNickname: string, deathMessage: string, eliminatorRpsState?: RPSState, eliminatedRpsState?: RPSState, killCount?: number) => void;
   clearDeathInfo: () => void;
+
+  // [1.4.7] 씨 로딩 관련
+  setSceneReady: (ready: boolean) => void;
+  prepareNewGame: () => void;
 
   // 리셋
   reset: () => void;
@@ -99,6 +106,7 @@ const initialState: GameState = {
   eliminatedRpsState: null,
   deathMessage: null,
   finalKillCount: 0,
+  isSceneReady: false, // [1.4.7] 씨 로딩 완료 상태
 };
 
 /**
@@ -209,6 +217,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   clearDeathInfo: () =>
     set({ eliminatorNickname: null, deathMessage: null, eliminatorRpsState: null, eliminatedRpsState: null, finalKillCount: 0 }),
+
+  // [1.4.7] 씨 로딩 관련
+  setSceneReady: (ready) => set({ isSceneReady: ready }),
+  prepareNewGame: () => set({ isSceneReady: false }),
 
   reset: () => {
     clearAllBuffers(); // 모든 보간 버퍼 초기화

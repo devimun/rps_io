@@ -298,6 +298,8 @@ export interface ClientToServerEvents {
   'player:move': (data: PlayerMoveInput) => void;
   'player:dash': () => void;
   'player:ready': () => void;
+  /** [1.4.7] 사설방 부활 요청 */
+  'player:respawn': () => void;
 }
 
 /**

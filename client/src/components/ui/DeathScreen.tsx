@@ -9,6 +9,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { t } from '../../utils/i18n';
 import { createShareMetadata, shareViaWebAPI, copyToClipboard, isWebShareSupported } from '../../utils/shareUtils';
 import { trackGameEnd, trackPlayAgain, trackShare } from '../../services/analytics';
+import { socketService } from '../../services/socketService';
 import { RPSState } from '@chaos-rps/shared';
 
 const DEATH_SCREEN_DELAY = 1500;
@@ -102,19 +103,12 @@ export const DeathScreen = memo(function DeathScreen() {
 
     try {
       if (isPrivateRoom && roomCode) {
-        // 사설방: 같은 방으로 재입장
-        const response = await fetch(`${API_BASE_URL}/rooms/join`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nickname,
-            code: roomCode, // 기존 방 코드 사용
-          }),
-        });
-        if (!response.ok) throw new Error('Failed to rejoin');
-        const data = await response.json();
-        setRoomInfo(data.roomId, roomCode, data.playerId, nickname, true);
+        // [1.4.7] 사설방: 즉시 부활 (로딩 없음, 같은 방)
+        // 서버 연결이 유지되어 있으므로 sendRespawn으로 부활 요청
+        socketService.sendRespawn();
+        clearDeathInfo();
         setPhase('playing');
+        setShowScreen(false);
       } else {
         // 공개방: 새로운 방 매칭
         const currentRoomId = useGameStore.getState().roomId;
@@ -129,7 +123,7 @@ export const DeathScreen = memo(function DeathScreen() {
         if (!response.ok) throw new Error('Failed to join');
         const data = await response.json();
         setRoomInfo(data.roomId, data.code || '', data.playerId, nickname);
-        setPhase('playing');
+        setPhase('loading');
       }
     } catch {
       setError(t('error.connectionFailed', language));

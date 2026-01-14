@@ -61,7 +61,7 @@ export const SPAWN_EDGE_MARGIN = 100;
 export const SPAWN_INVINCIBILITY_MS = 3000;
 
 /** 기본 플레이어 속도 */
-export const DEFAULT_PLAYER_SPEED = 330;
+export const DEFAULT_PLAYER_SPEED = 380;
 
 /** 기본 플레이어 속도 (별칭) */
 export const BASE_SPEED = DEFAULT_PLAYER_SPEED;
@@ -69,14 +69,14 @@ export const BASE_SPEED = DEFAULT_PLAYER_SPEED;
 /** 넉백 강도 */
 export const KNOCKBACK_FORCE = 150;
 
-/** 대시 속도 배율 (기본 속도의 2배) */
-export const DASH_SPEED_MULTIPLIER = 2;
+/** 대시 속도 배율 */
+export const DASH_SPEED_MULTIPLIER = 1.5;
 
 /** 대시 최대 지속 시간 (밀리초) */
 export const DASH_DURATION_MS = 1000;
 
-/** 대시 쿨다운 시간 (밀리초) - 1.5초 */
-export const DASH_COOLDOWN_MS = 1500;
+/** 대시 쿨다운 시간 (밀리초) - 3.0초 */
+export const DASH_COOLDOWN_MS = 3000;
 
 /** 지원 언어 목록 */
 export const SUPPORTED_LANGUAGES = ['ko', 'en'] as const;

@@ -23,7 +23,7 @@ export interface BotConfig {
 /** 기본 봇 설정 */
 const DEFAULT_BOT_CONFIG: BotConfig = {
   chaseSpeedMultiplier: 0.8,
-  fleeSpeedMultiplier: 1.0,
+  fleeSpeedMultiplier: 0.9,
   detectionRange: 500, // 감지 범위 확대
   updateInterval: 100,
 };

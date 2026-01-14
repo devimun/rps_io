@@ -4,10 +4,10 @@
  */
 
 /** 현재 앱 버전 */
-export const APP_VERSION = '1.4.5';
+export const APP_VERSION = '1.4.7';
 
 /** 빌드 날짜 */
-export const BUILD_DATE = '2026-01-05';
+export const BUILD_DATE = '2026-01-14';
 
 /** 업데이트 로그 타입 */
 export interface UpdateLog {
@@ -19,6 +19,16 @@ export interface UpdateLog {
 
 /** 업데이트 히스토리 (최신순) */
 export const UPDATE_LOGS: UpdateLog[] = [
+  {
+    version: '1.4.7',
+    date: '2026-01-14',
+    title: { ko: '1.4.7 버전 업데이트 🎨', en: 'Version 1.4.7 Update 🎨' },
+    changes: [
+      { ko: '플레이어 아바타가 변경됐어요 👤', en: 'Player avatar has been updated 👤' },
+      { ko: '게임 엔진이 업데이트 되었어요 ⚙️', en: 'Game engine has been updated ⚙️' },
+      { ko: '튜토리얼 문구가 변경되었어요 📖', en: 'Tutorial text has been updated 📖' },
+    ],
+  },
   {
     version: '1.4.5',
     date: '2026-01-05',

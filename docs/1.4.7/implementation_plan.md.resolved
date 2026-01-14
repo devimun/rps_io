@@ -1,0 +1,117 @@
+# 🔬 게임 시작 프레임 드랍 개선 계획
+
+## 📊 Trace 분석 결과 요약
+
+| 지표 | 현재 값 | 문제 |
+|------|---------|------|
+| 프레임 드랍율 | **39.3%** | 🔴 심각 |
+| UpdateLayer | **4,364ms** (평균 727ms/회) | 🔴 핵심 병목 |
+| Commit | **482ms** (평균 80ms/회) | 🔴 |
+| 카테고리: Rendering | **76.9%** | 스크립팅 아닌 렌더링이 문제 |
+| 카테고리: Scripting | **0.9%** | ✅ JS 코드는 문제 없음 |
+
+---
+
+## 🎯 근본 원인
+
+### 1. Container 당 Graphics 객체 과다 (7개 → 매 프레임 GPU 버퍼 재할당)
+
+```typescript
+// 현재: 1 Container = 7개 객체, 20명 = 140+ 렌더 오브젝트
+body = scene.add.graphics();      // Graphics
+leftEye = scene.add.graphics();   // Graphics
+rightEye = scene.add.graphics();  // Graphics  
+rpsSprite, nameText, crownText, dashBar...
+```
+
+### 2. `Graphics.clear()` + `fill...()` 매 프레임 호출 → GPU 버퍼 재할당
+
+---
+
+## ✅ 개선 방안
+
+### 1. 텍스처 사전 생성 (1개)
+
+| 텍스처 키 | 크기 | 색상 | 용도 |
+|-----------|------|------|------|
+| `circle` | **128×128** | 흰색 (0xffffff) | 본체, 눈 흰자, 눈동자 모두 사용 |
+
+> 원 하나로 `setTint()` + `setScale()`로 색상/크기 조절
+
+### 2. 사용 방식
+
+```typescript
+// 본체 (64px 기준 반지름)
+body.setTexture('circle');
+body.setTint(playerColor);
+body.setScale(player.size / 64);
+
+// 눈 흰자 (tint 없음 = 흰색)
+eyeWhite.setTexture('circle');
+eyeWhite.setScale(0.15);
+
+// 눈동자 (검은색)
+pupil.setTexture('circle');
+pupil.setTint(0x000000);
+pupil.setScale(0.08);
+```
+
+### 3. 눈동자 마우스 추적 기능
+
+```typescript
+// updateSprite()에서 눈동자 위치 계산
+const angle = currentAngle;  // 마우스 방향 각도 (이미 계산됨)
+const maxOffset = eyeSize * 0.3;  // 눈 안에서 이동 가능 범위
+
+const pupilOffsetX = Math.cos(angle) * maxOffset;
+const pupilOffsetY = Math.sin(angle) * maxOffset;
+
+leftPupil.setPosition(-eyeOffset + pupilOffsetX, -eyeY + pupilOffsetY);
+rightPupil.setPosition(eyeOffset + pupilOffsetX, -eyeY + pupilOffsetY);
+```
+
+### 4. Container 구조 변경
+
+| Before (7개) | After (9개, but Image 사용) |
+|--------------|------------------------------|
+| `body` (Graphics) | `body` (Image) ← tint 적용 |
+| `leftEye` (Graphics) | `leftEyeWhite` (Image) |
+| `rightEye` (Graphics) | `rightEyeWhite` (Image) |
+| | `leftPupil` (Image) ← 마우스 추적 |
+| | `rightPupil` (Image) ← 마우스 추적 |
+| `rpsSprite` (Sprite) | `rpsSprite` (Sprite) |
+| `nameText` (Text) | `nameText` (Text) |
+| `crownText` (Text) | `crownText` (Text) |
+
+> **객체 수는 증가하지만 Graphics → Image 변환으로 GPU 부하 대폭 감소**
+
+---
+
+## 📋 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| [MainScene.ts](file:///c:/Users/user/Desktop/DEV/rps_io/client/src/game/scenes/MainScene.ts) | `createPlayerTextures()` 추가 - 3개 원형 텍스처 생성 |
+| [PlayerRenderer.ts](file:///c:/Users/user/Desktop/DEV/rps_io/client/src/game/PlayerRenderer.ts) | Graphics → Image 변환, `drawBody()`/`drawEyes()` 제거, 눈동자 추적 로직 추가 |
+
+---
+
+## 🧪 검증 계획
+
+### 1. 수동 테스트
+- 플레이어 캐릭터 정상 표시
+- 색상 정상 적용 (닉네임 기반 해시)
+- **눈동자가 마우스 방향 추적**
+- RPS 상태 변경 시 스프라이트 변경
+- 1등 왕관 표시
+- 대시 바 작동
+
+### 2. 성능 측정 (Chrome DevTools Performance)
+- UpdateLayer: 4364ms → **500ms 이하**
+- Commit: 482ms → **100ms 이하**
+- 프레임 드랍율: 39% → **10% 이하**
+
+### 3. Trace 비교
+```bash
+cd analyze && node analyze_trace.js
+```

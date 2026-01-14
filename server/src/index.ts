@@ -233,6 +233,17 @@ async function start(): Promise<void> {
         }
       });
 
+      // [1.4.7] player:respawn 이벤트 처리 (사설방 부활)
+      socket.on('player:respawn', () => {
+        const gamePlayerId = socketPlayerMap.get(socket.id);
+        if (gamePlayerId) {
+          const success = room.respawnPlayer(gamePlayerId);
+          if (success) {
+            console.log(`🔄 플레이어 부활 완료: ${nickname} (${gamePlayerId})`);
+          }
+        }
+      });
+
       socket.on('disconnect', (reason) => {
         console.log(`🔌 클라이언트 연결 해제: ${socket.id} (${reason})`);
         StatsService.playerDisconnected();
