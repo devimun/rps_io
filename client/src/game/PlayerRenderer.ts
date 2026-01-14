@@ -335,9 +335,13 @@ export class PlayerRenderer {
       container.x = Math.round(targetX);
       container.y = Math.round(targetY);
     } else {
-      // 보간 결과 직접 적용 (정수 반올림으로 서브픽셀 떨림 방지)
-      container.x = Math.round(targetX);
-      container.y = Math.round(targetY);
+      // [1.4.8] 클라이언트 lerp 추가 - 프레임당 20%씩 목표에 접근
+      // 네트워크 불안정/프레임 드랍 시에도 부드럽게 보이도록
+      const lerpFactor = 0.2;
+      const newX = container.x + dx * lerpFactor;
+      const newY = container.y + dy * lerpFactor;
+      container.x = Math.round(newX);
+      container.y = Math.round(newY);
     }
 
     // 크기 적용

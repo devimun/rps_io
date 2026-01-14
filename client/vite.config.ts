@@ -25,6 +25,7 @@ export default defineConfig({
   },
   // 빌드 최적화: 청크 분리로 초기 로딩 개선
   build: {
+    sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks: {

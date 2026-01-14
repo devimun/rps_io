@@ -55,7 +55,7 @@ export const MOBILE_CONFIG: Partial<Phaser.Types.Core.GameConfig> = {
     roundPixels: true,
   },
   fps: {
-    target: 30,
+    target: 60,
     forceSetTimeOut: true,
   },
 };

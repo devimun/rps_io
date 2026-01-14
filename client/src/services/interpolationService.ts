@@ -29,7 +29,8 @@ const playerBuffers = new Map<string, Snapshot[]>();
 const MAX_BUFFER_SIZE = 6;
 
 /** 보간 지연 시간 (ms) - 이 시간만큼 과거 상태를 렌더링 */
-const INTERPOLATION_DELAY = 100;
+/** [1.4.8] 네트워크 지연 대응을 위해 100ms → 150ms 증가 */
+const INTERPOLATION_DELAY = 150;
 
 /**
  * 플레이어 스냅샷을 버퍼에 추가
