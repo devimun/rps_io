@@ -50,9 +50,9 @@ const translations: Record<SupportedLanguage, TranslationData> = {
     // 튜토리얼
     'tutorial.title': '게임 방법',
     'tutorial.rule1': '가위 > 보 > 바위 > 가위',
-    'tutorial.rule2': '상대를 잡으면 킬 획득',
-    'tutorial.rule3': '킬이 많을수록 크기 증가',
-    'tutorial.rule4': '주기적으로 전체 변신',
+    'tutorial.rule2': '상대를 잡으면 크기가 커집니다',
+    'tutorial.rule4': '주기적으로 나의 상태가 변경됩니다.',
+    'tutorial.rule5': '부스터를 사용해 빠르게 달려가세요! PC에서는 마우스 클릭, 모바일에서는 부스터 버튼을 활용하세요.',
     'tutorial.dontShowAgain': '다시 보지 않기',
     'tutorial.start': '시작하기',
 
@@ -106,8 +106,9 @@ const translations: Record<SupportedLanguage, TranslationData> = {
     // 튜토리얼
     'tutorial.title': 'How to Play',
     'tutorial.rule1': 'Scissors > Paper > Rock > Scissors',
-    'tutorial.rule3': 'More kills = bigger size',
-    'tutorial.rule4': 'All players transform together',
+    'tutorial.rule2': 'Catch opponents to grow bigger',
+    'tutorial.rule4': 'Your state changes periodically.',
+    'tutorial.rule5': 'Use boost to dash quickly! Click on PC, use the boost button on mobile.',
     'tutorial.dontShowAgain': "Don't show again",
     'tutorial.start': 'Start',
 

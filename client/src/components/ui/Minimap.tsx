@@ -102,8 +102,11 @@ export const Minimap = memo(function Minimap() {
     <div
       className="fixed z-30"
       style={{
-        bottom: isMobile ? '2vw' : '16px',
-        right: isMobile ? '2vw' : '16px',
+        // 모바일: 좌측 상단 (MobileRanking과 대칭), PC: 우측 하단
+        top: isMobile ? '28%' : undefined,
+        left: isMobile ? '1vw' : undefined,
+        bottom: isMobile ? undefined : '16px',
+        right: isMobile ? undefined : '16px',
       }}
     >
       <canvas

@@ -269,6 +269,11 @@ export class GameRoomEntity implements IGameRoom {
     }
   }
 
+  /** 봇 대시 쿨다운 (5초) */
+  private readonly BOT_DASH_COOLDOWN_MS = 5000;
+  /** 봇별 마지막 대시 시간 */
+  private botLastDashTime: Map<string, number> = new Map();
+
   /** 봇 AI 업데이트 */
   private updateBotAI(currentTime: number): void {
     const allPlayers = this.getPlayers();
@@ -281,6 +286,17 @@ export class GameRoomEntity implements IGameRoom {
         const isMoving = decision.action !== 'idle' ||
           (decision.direction.x !== 0 || decision.direction.y !== 0);
         this.movementSystem.setInput(player.id, { angle, isMoving, timestamp: currentTime });
+
+        // 추격이나 도주 시 대시 사용 (봇 전용 3초 쿨다운)
+        if (decision.action === 'chase' || decision.action === 'flee') {
+          const lastDash = this.botLastDashTime.get(player.id) || 0;
+          if (currentTime - lastDash >= this.BOT_DASH_COOLDOWN_MS) {
+            const success = this.handlePlayerDash(player.id);
+            if (success) {
+              this.botLastDashTime.set(player.id, currentTime);
+            }
+          }
+        }
       }
     }
   }

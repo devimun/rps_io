@@ -9,7 +9,6 @@ import { Lobby } from './components/ui/Lobby';
 import { GameCanvas } from './components/game/GameCanvas';
 import { Ranking } from './components/ui/Ranking';
 import { DeathScreen } from './components/ui/DeathScreen';
-import { Tutorial } from './components/ui/Tutorial';
 import { InAppWarning } from './components/ui/InAppWarning';
 import { Minimap } from './components/ui/Minimap';
 import { KillFeed } from './components/ui/KillFeed';
@@ -28,8 +27,6 @@ import { FeedbackModal } from './components/ui/FeedbackButton';
 function App() {
   const { phase } = useGameStore();
   const {
-    showTutorial,
-    tutorialDismissed,
     isInAppBrowser,
     isMobile,
     setIsInAppBrowser,
@@ -131,8 +128,7 @@ function App() {
 
       {/* [1.4.8] GameLoadingScreen 삭제됨 - MainScene에서만 로딩 처리 */}
 
-      {/* 튜토리얼 (첫 플레이 시) */}
-      {phase === 'playing' && showTutorial && !tutorialDismissed && <Tutorial />}
+      {/* 튜토리얼은 이제 로비에서 게임 시작 전에 표시됨 */}
 
       {/* 피드백 모달 (메인 화면에서만 표시) */}
       {phase === 'idle' && <FeedbackModal />}

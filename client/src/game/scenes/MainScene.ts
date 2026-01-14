@@ -14,6 +14,7 @@ import { socketService } from '../../services/socketService';
 import type { Player } from '@chaos-rps/shared';
 import { WORLD_SIZE } from '@chaos-rps/shared';
 import { PlayerRenderer } from '../PlayerRenderer';
+import { BoostButton } from '../BoostButton';
 
 /** 씬 키 상수 */
 export const SCENE_KEYS = {
@@ -52,8 +53,9 @@ export class MainScene extends Phaser.Scene {
   private playerRenderer!: PlayerRenderer;
 
   private currentAngle = 0;
-  private lastTapTime = 0;
   private isGameReady = false;
+  /** 모바일 부스터 버튼 */
+  private boostButton?: BoostButton;
 
   /** 로딩 UI */
   private loadingOverlay?: Phaser.GameObjects.Graphics; // [1.4.8] 전체 화면 오버레이
@@ -257,7 +259,7 @@ export class MainScene extends Phaser.Scene {
     // 0.5초 동안 로딩 바 채우기 (사용자 경험 + 부드러운 전환)
     this.time.addEvent({
       delay: 25,
-      repeat: 20,
+      repeat: 19, // 20번 실행 (초기 1회 + repeat 19회) → 0.05 * 20 = 1.0 (100%)
       callback: () => {
         this.loadingProgress += 0.05;
         this.onLoadProgress(this.loadingProgress);
@@ -301,8 +303,10 @@ export class MainScene extends Phaser.Scene {
       frameWidth: 128,
       frameHeight: 128,
     });
-    // [1.4.7] 원형 텍스처 로드 (Graphics → Image 최적화)
+    // 눈 전용 원형 텍스처
     this.load.image('circle', '/assets/images/circle.png');
+    // Slither.io 스타일 광택 텍스처 (본체 전용)
+    this.load.image('slither-body', '/assets/images/slither_body.png');
     this.load.start();
   }
 
@@ -435,10 +439,15 @@ export class MainScene extends Phaser.Scene {
     // 물리, 카메라 설정
     this.physics.world.setBounds(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
     this.cameras.main.setBounds(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
-    this.cameras.main.setZoom(isTouchDevice ? 0.6 : 1.0);
+    this.cameras.main.setZoom(isTouchDevice ? 0.6 : 0.9);
 
     // 그리드 배치
     this.createGrid();
+
+    // 모바일 부스터 버튼 생성 (setupInput보다 먼저 생성해야 터치 감지 가능)
+    if (isTouchDevice) {
+      this.boostButton = new BoostButton(this, tryDash);
+    }
 
     // 입력 설정
     this.setupInput();
@@ -548,21 +557,37 @@ export class MainScene extends Phaser.Scene {
 
   private setupInput(): void {
     const isTouchDevice = 'ontouchstart' in window;
-    const DOUBLE_TAP_THRESHOLD = 300;
 
+    // 포인터 다운 (이동 + PC 대시)
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      this.updateAngleFromPointer(pointer);
       if (isTouchDevice) {
-        const now = Date.now();
-        if (now - this.lastTapTime < DOUBLE_TAP_THRESHOLD) tryDash();
-        this.lastTapTime = now;
-      } else if (pointer.leftButtonDown()) {
-        tryDash();
+        // 모바일: 부스터 버튼 영역 터치 시 즉시 대시 실행
+        if (this.boostButton?.contains(pointer.x, pointer.y)) {
+          tryDash();
+          return; // 부스터 버튼 터치는 이동 조작으로 처리하지 않음
+        }
+        // 화면 전체에서 이동 조작 가능
+        this.updateAngleFromPointer(pointer);
+      } else {
+        // PC: 클릭 시 이동 + 좌클릭 대시
+        this.updateAngleFromPointer(pointer);
+        if (pointer.leftButtonDown()) {
+          tryDash();
+        }
       }
     });
 
+    // 포인터 이동 (방향 업데이트)
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      this.updateAngleFromPointer(pointer);
+      // 모바일: 부스터 버튼 영역은 이동 조작에서 제외
+      if (isTouchDevice && this.boostButton?.contains(pointer.x, pointer.y)) {
+        return;
+      }
+
+      // 터치 중이거나 마우스 이동 시
+      if (pointer.isDown || !isTouchDevice) {
+        this.updateAngleFromPointer(pointer);
+      }
     });
   }
 
@@ -613,6 +638,9 @@ export class MainScene extends Phaser.Scene {
       this.cachedDashCooldownEndTime
     );
     this.updateCamera(myPlayerId);
+
+    // 모바일 부스터 버튼 업데이트
+    this.boostButton?.update();
   }
 
   /** [1.4.5] 화면 내 플레이어 필터링 - sqrt 제거로 성능 개선 */
