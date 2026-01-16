@@ -147,9 +147,10 @@ export class TransformSystem {
       }
     }
 
-    // 더 이상 존재하지 않는 플레이어 정리
+    // [최적화] 더 이상 존재하지 않는 플레이어 정리 (Set 사용으로 O(n) 개선)
+    const activePlayerIds = new Set(playerIds);
     for (const playerId of this.playerNextStates.keys()) {
-      if (!playerIds.includes(playerId)) {
+      if (!activePlayerIds.has(playerId)) {
         this.playerNextStates.delete(playerId);
       }
     }
