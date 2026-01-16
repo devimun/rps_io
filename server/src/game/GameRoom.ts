@@ -219,31 +219,34 @@ export class GameRoomEntity implements IGameRoom {
     const deltaTime = Math.min(actualDelta, 0.1); // 최대 100ms
     this.lastTickTime = now;
 
+    // [최적화] 플레이어 목록 한 번만 가져오기
+    const players = this.getPlayers();
+
     // 물리 연산 (60Hz)
-    this.updateBotAI(now);
-    this.updateDash();
-    this.movementSystem.update(this.getPlayers(), deltaTime, (id) => this.dashSystem.getSpeedMultiplier(id));
-    this.updateTransforms();
-    this.checkCollisions();
-    this.maintainBotCount();
+    this.updateBotAI(now, players);
+    this.updateDash(players);
+    this.movementSystem.update(players, deltaTime, (id) => this.dashSystem.getSpeedMultiplier(id));
+    this.updateTransforms(players);
+    this.checkCollisions(players);
+    this.maintainBotCount(players);
 
     // 네트워크 브로드캐스트 (20Hz - 50ms 간격)
     if (now - this.lastBroadcastTime >= this.BROADCAST_INTERVAL) {
       this.lastBroadcastTime = now;
-      this.broadcastState();
-      this.updateRanking(now);
+      this.broadcastState(players);
+      this.updateRanking(now, players);
     }
   }
 
   /** 봇 수를 유지합니다 (20명 유지) */
-  private maintainBotCount(): void {
+  private maintainBotCount(players: PlayerEntity[]): void {
     if (!this.fillWithBots) return;
 
     const currentCount = this.players.size;
     if (currentCount < this.maxPlayers) {
       // 한 틱에 1명씩만 추가 (급격한 변화 방지)
       const botName = generateBotName();
-      const existingPlayers = this.getPlayers().map(p => p.toJSON());
+      const existingPlayers = players.map(p => p.toJSON());
       const spawnPos = this.spawnSystem.findSafeSpawnPosition(existingPlayers);
       const bot = new BotEntity(botName, spawnPos.x, spawnPos.y);
       this.players.set(bot.id, bot);
@@ -251,18 +254,18 @@ export class GameRoomEntity implements IGameRoom {
   }
 
   /** 랭킹 업데이트 */
-  private updateRanking(now: number): void {
+  private updateRanking(now: number, players: PlayerEntity[]): void {
     if (now - this.lastRankingUpdate < this.RANKING_UPDATE_INTERVAL) return;
     this.lastRankingUpdate = now;
 
-    const players = this.getPlayers().map(p => p.toJSON());
-    const rankings = calculateRanking(players, 10);
+    const playerJsons = players.map(p => p.toJSON());
+    const rankings = calculateRanking(playerJsons, 10);
     this.onRankingUpdate?.(rankings);
   }
 
   /** 대시 상태 업데이트 */
-  private updateDash(): void {
-    const playerIds = this.getPlayers().map(p => p.id);
+  private updateDash(players: PlayerEntity[]): void {
+    const playerIds = players.map(p => p.id);
     const events = this.dashSystem.updateAll(playerIds);
     for (const event of events) {
       this.onDashEvent?.(event);
@@ -275,11 +278,12 @@ export class GameRoomEntity implements IGameRoom {
   private botLastDashTime: Map<string, number> = new Map();
 
   /** 봇 AI 업데이트 */
-  private updateBotAI(currentTime: number): void {
-    const allPlayers = this.getPlayers();
-    for (const player of allPlayers) {
+  private updateBotAI(currentTime: number, players: PlayerEntity[]): void {
+    // [최적화] 직렬화된 플레이어 목록 한 번만 생성
+    const playerJsons = players.map(p => p.toJSON());
+    for (const player of players) {
       if (player instanceof BotEntity) {
-        player.updateAI(allPlayers.map(p => p.toJSON()), currentTime);
+        player.updateAI(playerJsons, currentTime);
         const decision = player.getDecision();
         // 방향 벡터에서 각도 계산
         const angle = Math.atan2(decision.direction.y, decision.direction.x);
@@ -301,8 +305,8 @@ export class GameRoomEntity implements IGameRoom {
     }
   }
 
-  private updateTransforms(): void {
-    const playerIds = this.getPlayers().map(p => p.id);
+  private updateTransforms(players: PlayerEntity[]): void {
+    const playerIds = players.map(p => p.id);
     const events = this.transformSystem.update(playerIds);
 
     // 변신 이벤트 처리
@@ -318,8 +322,7 @@ export class GameRoomEntity implements IGameRoom {
     }
   }
 
-  private checkCollisions(): void {
-    const players = this.getPlayers();
+  private checkCollisions(players: PlayerEntity[]): void {
     const toRemove: string[] = [];
 
     // Spatial Hash Grid로 O(n) 충돌 검사
@@ -382,11 +385,11 @@ export class GameRoomEntity implements IGameRoom {
   private clampX(x: number, size: number): number { return Math.max(size, Math.min(WORLD_WIDTH - size, x)); }
   private clampY(y: number, size: number): number { return Math.max(size, Math.min(WORLD_HEIGHT - size, y)); }
 
-  private broadcastState(): void {
+  private broadcastState(players: PlayerEntity[]): void {
     if (!this.onStateChange) return;
 
     // 각 플레이어의 nextRpsState 포함
-    const playersWithNext = this.getPlayers().map(p => {
+    const playersWithNext = players.map(p => {
       const json = p.toJSON();
       // 자기 자신의 다음 상태 포함 (다른 플레이어 것은 클라이언트에서 필터링)
       json.nextRpsState = this.transformSystem.getNextState(p.id);

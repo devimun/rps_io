@@ -349,8 +349,8 @@ export class PlayerRenderer {
     const playerColor = container.getData('playerColor') as number;
     const rpsColor = RPS_COLORS[player.rpsState];
 
-    // 무적 상태 (깜빡임 없이 반투명)
-    container.setAlpha(this.calculateInvincibilityAlpha(player));
+    // 알파값 설정 (무적 시스템 제거됨)
+    container.setAlpha(1);
 
     // 상태 변경 감지 (불필요한 재렌더링 방지)
     const lastRpsState = container.getData('lastRpsState') as string | undefined;
@@ -547,12 +547,7 @@ export class PlayerRenderer {
     return (r << 16) | (g << 8) | b;
   }
 
-  /**
-   * 알파값 계산 (무적 시스템 제거됨 - 항상 1 반환)
-   */
-  private calculateInvincibilityAlpha(_player: Player): number {
-    return 1;
-  }
+
 
   /**
    * 대시바 그리기 (플레이어 아래에 표시)
