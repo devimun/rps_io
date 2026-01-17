@@ -383,7 +383,7 @@ export class PlayerRenderer {
       container.setData('lastSizeRounded', sizeRounded);
 
       // 본체 업데이트 (상태 변경 시에만)
-      this.drawBody(container, smoothedSize, playerColor, rpsColor, isMe);
+      this.drawBody(container, smoothedSize, playerColor, rpsColor);
     }
 
     // [1.4.7] 눈 업데이트 (매 프레임 - 마우스 추적을 위해)
@@ -448,7 +448,6 @@ export class PlayerRenderer {
     size: number,
     playerColor: number,
     _rpsColor: number,
-    isMe: boolean
   ): void {
     const body = container.getData('body') as Phaser.GameObjects.Image;
     const border = container.getData('border') as Phaser.GameObjects.Image;

@@ -439,7 +439,7 @@ export class MainScene extends Phaser.Scene {
     // 물리, 카메라 설정
     this.physics.world.setBounds(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
     this.cameras.main.setBounds(0, 0, WORLD_CONFIG.WIDTH, WORLD_CONFIG.HEIGHT);
-    this.cameras.main.setZoom(isTouchDevice ? 0.6 : 0.9);
+    this.cameras.main.setZoom(isTouchDevice ? 0.75 : 0.9);
 
     // 그리드 배치
     this.createGrid();

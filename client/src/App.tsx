@@ -20,6 +20,7 @@ import { detectDevice } from './utils/deviceDetector';
 import { extractRoomCode } from './utils/shareUtils';
 import { initAnalytics } from './services/analytics';
 import { FeedbackModal } from './components/ui/FeedbackButton';
+import { MobileDashButton } from './components/ui/MobileDashButton';
 
 /**
  * 메인 앱 컴포넌트
@@ -110,6 +111,8 @@ function App() {
               <>
                 <MobileRanking />
                 <Minimap />
+                {/* [1.4.9] 모바일 대시 버튼 */}
+                <MobileDashButton />
               </>
             ) : (
               <>
