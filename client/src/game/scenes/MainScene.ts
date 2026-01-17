@@ -14,7 +14,6 @@ import { socketService } from '../../services/socketService';
 import type { Player } from '@chaos-rps/shared';
 import { WORLD_SIZE } from '@chaos-rps/shared';
 import { PlayerRenderer } from '../PlayerRenderer';
-import { BoostButton } from '../BoostButton';
 
 /** 씬 키 상수 */
 export const SCENE_KEYS = {
@@ -54,8 +53,7 @@ export class MainScene extends Phaser.Scene {
 
   private currentAngle = 0;
   private isGameReady = false;
-  /** 모바일 부스터 버튼 */
-  private boostButton?: BoostButton;
+
 
   /** 로딩 UI */
   private loadingOverlay?: Phaser.GameObjects.Graphics; // [1.4.8] 전체 화면 오버레이
@@ -446,10 +444,7 @@ export class MainScene extends Phaser.Scene {
     // 그리드 배치
     this.createGrid();
 
-    // 모바일 부스터 버튼 생성 (setupInput보다 먼저 생성해야 터치 감지 가능)
-    if (isTouchDevice) {
-      this.boostButton = new BoostButton(this, tryDash);
-    }
+
 
     // 입력 설정
     this.setupInput();
@@ -595,12 +590,7 @@ export class MainScene extends Phaser.Scene {
     // 포인터 다운 (이동 + PC 대시)
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (isTouchDevice) {
-        // 모바일: 부스터 버튼 영역 터치 시 즉시 대시 실행
-        if (this.boostButton?.contains(pointer.x, pointer.y)) {
-          tryDash();
-          return; // 부스터 버튼 터치는 이동 조작으로 처리하지 않음
-        }
-        // 화면 전체에서 이동 조작 가능
+        // 모바일: 더블탭으로 대시 사용 (부스터 버튼 제거됨)
         this.updateAngleFromPointer(pointer);
       } else {
         // PC: 클릭 시 이동 + 좌클릭 대시
@@ -613,11 +603,6 @@ export class MainScene extends Phaser.Scene {
 
     // 포인터 이동 (방향 업데이트)
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      // 모바일: 부스터 버튼 영역은 이동 조작에서 제외
-      if (isTouchDevice && this.boostButton?.contains(pointer.x, pointer.y)) {
-        return;
-      }
-
       // 터치 중이거나 마우스 이동 시
       if (pointer.isDown || !isTouchDevice) {
         this.updateAngleFromPointer(pointer);
@@ -673,8 +658,6 @@ export class MainScene extends Phaser.Scene {
     );
     this.updateCamera(myPlayerId);
 
-    // 모바일 부스터 버튼 업데이트
-    this.boostButton?.update();
   }
 
   /** [1.4.5] 화면 내 플레이어 필터링 - sqrt 제거로 성능 개선 */
